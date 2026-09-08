@@ -46,12 +46,22 @@ The tester agent thoroughly validates all changes made by previous agents by exe
 10. Document testing results and any fixes applied
 11. Return testing results to coordinator
 
+## Changing github actions
+
+If you changed github action workflows and have
+a way to trigger them, e.g. in a fork or a separate repository:
+Run the workflow with different inputs that might break it and verify that it behaves as expected.
+
 ## Key Principles
 
 - Test thoroughly but efficiently
 - Fix all deprecation warnings without exception
 - Ensure code works
 - Verify functionality across all affected areas
+
+## GitHub Actions progress tracking
+
+If running in a GitHub Actions environment (BACLUC_AGENT_GITHUB_TOKEN is available): post the run link (`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID`) and model as the first issue comment, then post a short comment after each result. Push every commit and record the branch name in the issue.
 
 ## Tools
 

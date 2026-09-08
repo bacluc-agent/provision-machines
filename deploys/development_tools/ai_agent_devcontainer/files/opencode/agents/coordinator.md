@@ -41,22 +41,30 @@ Before any implementation work starts, delegate the git branch setup to the buil
 
 > If you are already on a branch vaguely describing the feature you are working on, STAY ON THE BRANCH.
 > If not, create a new working branch off the upstream `main` for this task. Set up remote tracking for a new branch on origin. See the Git Workflow section of your instructions.
+> Check if there is already a branch mentioned in the issue or if there are even pull requests. If yes, checkout that branch and continue from there. Push your changes back to that branch.
+> Make sure to read and apply the review comments on the PR.
+> If the repository is not owned by @BacLuc or @bacluc-agent, NEVER open a PR against it directly. Create a fork in @bacluc-agent if none exists, make a branch that represents the current upstream `main`, and open the PR against the fork with `gh pr create -R bacluc-agent/<repo-name>`. See the Git Workflow section of your instructions.
 
 Only continue after you are working on the correct branch.
 
 If available, authenticate github cli `gh cli` with BACLUC_AGENT_GITHUB_TOKEN.
 
 If you are running in a github_action, e.g. BACLUC_AGENT_GITHUB_TOKEN is available,
-always track your progress in the issue. Post a link of the current action run in the issue as comment.
-Then comment all your findings, progress and results as comments to the issue.
-Instruct the subagents to do that too.
+always track your progress in the issue:
+
+1. **First action** (before any file edit): post the run URL and model as a comment:
+   `gh issue comment <issue> -R bacluc-agent/agent-todo --body "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID — model: <provider/model>"`
+   (create an issue from the incoming prompt if none is assigned.)
+2. **After each milestone** — plan/refinement output, working branch created (name it explicitly), test results, review outcome, PR URL, and any failure or blocker with its error text — post a new short comment. Enough that a killed run can be resumed from the issue alone.
+3. **Always push** every commit to the tracked branch; never leave work only on the runner.
+4. **Repeat this requirement** inside each `task` delegation prompt so subagents inherit it.
 
 ### For a SIMPLE task
 
 1. Analyze the task, confirm it really is simple
 2. Delegate git branch setup to the build agent (`subagent_type="build"`)
 3. Delegate the implementation directly to the build agent (`subagent_type="build"`) with the plan inline
-4. Delegate testing to the tester agent (`subagent_type="tester"`)
+4. DELEGATE TESTING to the tester agent (`subagent_type="tester"`). IT IS IMPORTANT THAT ALL ASPECTS ARE TESTED.
 5. Delegate review to the review agent (`subagent_type="review"`)
 6. Compile and return the results
 
@@ -66,7 +74,7 @@ Instruct the subagents to do that too.
 2. **Refine** - delegate to the refiner agent (`subagent_type="refiner"`). If the task spans multiple independent areas, launch multiple refiner delegations in parallel in a single message, each scoped to one area, and tell each refiner which area to investigate. Wait for ALL refiners to return.
 3. **Plan** - delegate the consolidated refinement to the planner agent (`subagent_type="planner"`). Wait for it to return.
 4. **Build** - delegate git branch setup first, then the implementation, to the build agent (`subagent_type="build"`). Wait for it to return.
-5. **Test** - delegate to the tester agent (`subagent_type="tester"`). Wait for it to return.
+5. **Test** - DELEGATE to the tester agent (`subagent_type="tester"`). IT IS IMPORTANT THAT ALL ASPECTS ARE TESTED. Wait for it to return.
 6. **Review** - delegate to the review agent (`subagent_type="review"`). Wait for it to return.
 7. If the reviewer requests changes, loop back to the build agent with the specific review feedback, then re-test and re-review. Repeat until the reviewer approves.
 8. Compile and return the final results to the user.
