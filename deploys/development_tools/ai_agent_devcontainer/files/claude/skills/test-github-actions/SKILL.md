@@ -1,6 +1,6 @@
 ---
 name: test-github-actions
-description: Trigger, monitor, and debug GitHub Actions workflow runs from the command line
+description: Trigger, monitor, debug, and develop GitHub Actions workflows from the command line. Load when creating or modifying GitHub Actions workflow files.
 ---
 
 # Testing GitHub Actions workflows
@@ -17,20 +17,20 @@ Run the commands from each `run:` block in your shell, in order, with the same e
 
 ## Trigger a workflow run
 
-Three ways, in increasing order of control:
+Three ways, in decreasing order of control:
 
 ```bash
-# 1. push a branch (triggers on: push)
+# 1. dispatch manually, with inputs
+gh workflow run <file> --ref <branch> [--field input=value]
+
+# 2. push a branch (triggers on: push)
 git push origin <branch>
 
-# 2. open a PR (triggers on: pull_request)
+# 3. open a PR (triggers on: pull_request)
 gh pr create --base main --head <branch>
-
-# 3. dispatch manually, with inputs
-gh workflow run <file> --ref <branch> [--field input=value]
 ```
 
-For example, to dispatch the verify-renovate workflow with the snapshot update input:
+For example, to dispatch the verify-renovate workflow in https://github.com/bacluc/provision-machines with the snapshot update input:
 
 ```bash
 gh workflow run verify-renovate.yml --ref main --field update_snapshot=true
@@ -55,12 +55,8 @@ gh run watch <id>
 ## Run multiple times with different parameters
 
 After changing a workflow, run it multiple times with different parameters to cover the branches of the logic (e.g. `update_snapshot=true` and `update_snapshot=false` for verify-renovate). A single green run does not prove the workflow handles all inputs.
-
-## Workflows in this repository
-
-- `ci.yaml` — jobs: `pyinfra_lint` (pytest, ruff, mypy, prettier) and `run_pyinfra` (runs pyinfra locally, then update-script and cleanup-script, then pyinfra a second time)
-- `verify-renovate.yml` — input: `update_snapshot` boolean; checks dependencies against the renovate snapshot, or updates the snapshot when the input is set
+Then make the links to the test runs you triggered transparent, either as response or in the issue or PR you are working on.
 
 ## When to use
 
-This skill loads when developing or modifying GitHub Actions workflows in this repository.
+This skill loads when developing or modifying GitHub Actions workflows.
