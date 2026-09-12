@@ -2,6 +2,7 @@
 description: Plans your feature
 mode: all
 temperature: 0.1
+version: 1.0.1
 permission:
   "*": allow
 ---
