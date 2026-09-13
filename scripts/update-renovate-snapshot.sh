@@ -10,52 +10,52 @@ REPO_ROOT=$(dirname $SCRIPT_DIR)
 SNAPSHOT_FILE="$REPO_ROOT/.github/renovate-snapshot.json"
 
 show_help() {
-    echo "Usage: $0 [OPTION]"
-    echo ""
-    echo "Options:"
-    echo "  --check      Check if snapshot is valid (CI mode)"
-    echo "  --update     Update snapshot from Renovate output"
-    echo "  --help       Show this help"
+  echo "Usage: $0 [OPTION]"
+  echo ""
+  echo "Options:"
+  echo "  --check      Check if snapshot is valid (CI mode)"
+  echo "  --update     Update snapshot from Renovate output"
+  echo "  --help       Show this help"
 }
 
 check_snapshot() {
-    write_snapshot
-    git diff --exit-code $SNAPSHOT_FILE
+  write_snapshot
+  git diff --exit-code $SNAPSHOT_FILE
 }
 
 generate_snapshot() {
-    # Use DEBUG level to get packageFiles with docker dependencies
-    docker run --rm -e LOG_LEVEL=debug -e LOG_FORMAT=json -v "$REPO_ROOT:/workspace" -w /workspace renovate/renovate --platform=local 2>/tmp/renovate-err.log | jq -s \
-        '(map(select(.githubDeps)) | first | .githubDeps) as $githubDeps | [((map(select(.msg == "packageFiles with updates")) | first | .config.dockerfile[].deps[].depName) // null)] as $dockerDeps | ($githubDeps + $dockerDeps) | unique'
+  # Use DEBUG level to get packageFiles with docker dependencies
+  docker run --rm -e LOG_LEVEL=debug -e LOG_FORMAT=json -v "$REPO_ROOT:/workspace" -w /workspace renovate/renovate --platform=local 2> /tmp/renovate-err.log | jq -s \
+    '(map(select(.githubDeps)) | first | .githubDeps) as $githubDeps | [((map(select(.msg == "packageFiles with updates")) | first | .config.dockerfile[].deps[].depName) // null)] as $dockerDeps | ($githubDeps + $dockerDeps) | unique'
 }
 
 write_snapshot() {
-    local tmp
-    tmp=$(mktemp)
-    generate_snapshot > "$tmp"
-    mv "$tmp" "$SNAPSHOT_FILE"
+  local tmp
+  tmp=$(mktemp)
+  generate_snapshot > "$tmp"
+  mv "$tmp" "$SNAPSHOT_FILE"
 }
 
 # Main script logic
 case "${1:-}" in
-    --help|-h)
-        show_help
-        ;;
-    --check|--ci)
-        check_snapshot
-        exit $?
-        ;;
-    --update|-u)
-        write_snapshot
-        ;;
-    "")
-        echo -e "No option specified. Use --help for usage."
-        exit 1
-        ;;
-    *)
-        echo -e "Unknown option: $1"
-        echo ""
-        show_help
-        exit 1
-        ;;
+  --help | -h)
+    show_help
+    ;;
+  --check | --ci)
+    check_snapshot
+    exit $?
+    ;;
+  --update | -u)
+    write_snapshot
+    ;;
+  "")
+    echo -e "No option specified. Use --help for usage."
+    exit 1
+    ;;
+  *)
+    echo -e "Unknown option: $1"
+    echo ""
+    show_help
+    exit 1
+    ;;
 esac

@@ -10,8 +10,8 @@ PORT_MAP_FILE="$PORT_MAP_DIR/port_map"
 find_free_port() {
   local port=4096
   local mapped_ports
-  mapped_ports=$(awk '{print $2}' "$PORT_MAP_FILE" 2>/dev/null || true)
-  while nc -z 127.0.0.1 "$port" 2>/dev/null || grep -qx "$port" <<< "$mapped_ports"; do
+  mapped_ports=$(awk '{print $2}' "$PORT_MAP_FILE" 2> /dev/null || true)
+  while nc -z 127.0.0.1 "$port" 2> /dev/null || grep -qx "$port" <<< "$mapped_ports"; do
     port=$((port + 1))
     if [[ $port -gt 9999 ]]; then
       port=$((RANDOM % 60000 + 4000))
@@ -33,7 +33,7 @@ save_port() {
   mkdir -p "$PORT_MAP_DIR"
   touch "$PORT_MAP_FILE"
   local existing
-  existing=$(awk -v d="$dir" '$1 != d' "$PORT_MAP_FILE" 2>/dev/null || true)
+  existing=$(awk -v d="$dir" '$1 != d' "$PORT_MAP_FILE" 2> /dev/null || true)
   {
     printf "%s\n" "$existing"
     printf "%s %s\n" "$dir" "$port"
@@ -73,7 +73,7 @@ export GIT_AUTHOR_EMAIL=$(git config user.email)
 
 mkdir -p /tmp/noworktree
 if [[ -f $WORKSPACE_DIR/.git ]]; then
-  if grep -q "../" $WORKSPACE_DIR/.git ; then
+  if grep -q "../" $WORKSPACE_DIR/.git; then
     WORKTREE_DIR=$(git rev-parse --git-dir)
     WORKTREE_GIT_DIR=$(basename $(realpath $WORKTREE_DIR/../../../))
     RELATIVE_WORKTREE_SOURCE=$(realpath --relative-to=. $WORKTREE_DIR)

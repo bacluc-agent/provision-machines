@@ -49,31 +49,36 @@ It allows pulling appropriate pauses between the actions and annotating the vide
 **Important**: Overlays are `pointer-events: none` — they do not interfere with page interactions. You can safely keep sticky overlays visible while clicking, filling, or performing any actions on the page.
 
 ```js
-;async (page) => {
-  await page.screencast.start({ path: 'video.webm', size: { width: 1280, height: 800 } })
-  await page.goto('https://demo.playwright.dev/todomvc')
+async (page) => {
+  await page.screencast.start({
+    path: "video.webm",
+    size: { width: 1280, height: 800 },
+  });
+  await page.goto("https://demo.playwright.dev/todomvc");
 
   // Show a chapter card — blurs the page and shows a dialog.
   // Blocks until duration expires, then auto-removes.
   // Use this for simple use cases, but always feel free to hand-craft your own beautiful
   // overlay via await page.screencast.showOverlay().
-  await page.screencast.showChapter('Adding Todo Items', {
-    description: 'We will add several items to the todo list.',
+  await page.screencast.showChapter("Adding Todo Items", {
+    description: "We will add several items to the todo list.",
     duration: 2000,
-  })
+  });
 
   // Perform action
   await page
-    .getByRole('textbox', { name: 'What needs to be done?' })
-    .pressSequentially('Walk the dog', { delay: 60 })
-  await page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter')
-  await page.waitForTimeout(1000)
+    .getByRole("textbox", { name: "What needs to be done?" })
+    .pressSequentially("Walk the dog", { delay: 60 });
+  await page
+    .getByRole("textbox", { name: "What needs to be done?" })
+    .press("Enter");
+  await page.waitForTimeout(1000);
 
   // Show next chapter
-  await page.screencast.showChapter('Verifying Results', {
-    description: 'Checking the item appeared in the list.',
+  await page.screencast.showChapter("Verifying Results", {
+    description: "Checking the item appeared in the list.",
     duration: 2000,
-  })
+  });
 
   // Add a sticky annotation that stays while you perform actions.
   // Overlays are pointer-events: none, so they won't block clicks.
@@ -83,20 +88,22 @@ It allows pulling appropriate pauses between the actions and annotating the vide
       border-radius: 8px; font-size: 13px; color: white;">
       ✓ Item added successfully
     </div>
-  `)
+  `);
 
   // Perform more actions while the annotation is visible
   await page
-    .getByRole('textbox', { name: 'What needs to be done?' })
-    .pressSequentially('Buy groceries', { delay: 60 })
-  await page.getByRole('textbox', { name: 'What needs to be done?' }).press('Enter')
-  await page.waitForTimeout(1500)
+    .getByRole("textbox", { name: "What needs to be done?" })
+    .pressSequentially("Buy groceries", { delay: 60 });
+  await page
+    .getByRole("textbox", { name: "What needs to be done?" })
+    .press("Enter");
+  await page.waitForTimeout(1500);
 
   // Remove the annotation when done
-  await annotation.dispose()
+  await annotation.dispose();
 
   // You can also highlight relevant locators and provide contextual annotations.
-  const bounds = await page.getByText('Walk the dog').boundingBox()
+  const bounds = await page.getByText("Walk the dog").boundingBox();
   await page.screencast.showOverlay(
     `
     <div style="position: absolute;
@@ -117,11 +124,11 @@ It allows pulling appropriate pauses between the actions and annotating the vide
       color: white;">Check it out, it is right above this text
     </div>
   `,
-    { duration: 2000 }
-  )
+    { duration: 2000 },
+  );
 
-  await page.screencast.stop()
-}
+  await page.screencast.stop();
+};
 ```
 
 Embrace creativity, overlays are powerful.

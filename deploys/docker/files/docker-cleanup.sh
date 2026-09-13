@@ -9,8 +9,8 @@ set -euo pipefail
 
 # Thresholds
 SIZE_THRESHOLD_MB="200"
-SIZE_THRESHOLD=$((SIZE_THRESHOLD_MB * 1024 * 1024))  # Convert to bytes
-AGE_THRESHOLD_DAYS=60  # Approx. 2 months
+SIZE_THRESHOLD=$((SIZE_THRESHOLD_MB * 1024 * 1024)) # Convert to bytes
+AGE_THRESHOLD_DAYS=60                               # Approx. 2 months
 
 # Metadata directory
 METADATA_DIR="${HOME}/.local/share/docker-image-usage"
@@ -19,7 +19,7 @@ METADATA_DIR="${HOME}/.local/share/docker-image-usage"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m'  # No Color
+NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting Docker Image Cleanup...${NC}"
 echo "Images must meet both conditions to be deleted:"
@@ -36,9 +36,9 @@ get_last_used() {
   local safe_image_name
   safe_image_name=$(echo "$image" | tr '/' '-' | tr ':' '_')
   local metadata_file="${METADATA_DIR}/${safe_image_name}.json"
-  
+
   if [ -f "$metadata_file" ]; then
-    jq -r '.last_used // 0' "$metadata_file" 2>/dev/null || echo "0"
+    jq -r '.last_used // 0' "$metadata_file" 2> /dev/null || echo "0"
   else
     echo "0"
   fi
@@ -76,28 +76,28 @@ while IFS= read -r image_info; do
     while IFS= read -r cid; do
       [ -z "$cid" ] && continue
       # Get container state and timestamps
-      state=$(docker inspect "$cid" --format '{{.State.Status}}' 2>/dev/null || echo "")
+      state=$(docker inspect "$cid" --format '{{.State.Status}}' 2> /dev/null || echo "")
       if [ "$state" = "running" ]; then
-        finished=$(docker inspect "$cid" --format '{{.State.StartedAt}}' 2>/dev/null || echo "0")
+        finished=$(docker inspect "$cid" --format '{{.State.StartedAt}}' 2> /dev/null || echo "0")
       else
-        finished=$(docker inspect "$cid" --format '{{.State.FinishedAt}}' 2>/dev/null || echo "0")
+        finished=$(docker inspect "$cid" --format '{{.State.FinishedAt}}' 2> /dev/null || echo "0")
       fi
       # Convert to timestamp
       if [ -n "$finished" ] && [ "$finished" != "0001-01-01T00:00:00Z" ]; then
-        finished_ts=$(date -u -d "$finished" +%s 2>/dev/null || echo "0")
+        finished_ts=$(date -u -d "$finished" +%s 2> /dev/null || echo "0")
         if [ "$finished_ts" -gt "$last_used_from_container" ]; then
           last_used_from_container=$finished_ts
         fi
       fi
-    done < <(docker ps -a --filter "ancestor=$image_name" --format "{{.ID}}" 2>/dev/null)
+    done < <(docker ps -a --filter "ancestor=$image_name" --format "{{.ID}}" 2> /dev/null)
 
     if [ "$last_used_from_container" -gt 0 ]; then
       last_used=$last_used_from_container
     else
       # No metadata found, check image creation time
-      created=$(docker inspect "$image_id" --format '{{.Created}}' 2>/dev/null || echo "0")
+      created=$(docker inspect "$image_id" --format '{{.Created}}' 2> /dev/null || echo "0")
       if [ "$created" != "0001-01-01T00:00:00Z" ] && [ -n "$created" ]; then
-        last_used=$(date -u -d "$created" +%s 2>/dev/null || echo "0")
+        last_used=$(date -u -d "$created" +%s 2> /dev/null || echo "0")
       else
         last_used="0"
       fi
@@ -130,13 +130,13 @@ while IFS= read -r image_info; do
     DRY_RUN=${DRY_RUN:-true}
 
     if [[ "$DRY_RUN" != "true" ]]; then
-        # Delete the image
-        if docker rmi "$image_id" > /dev/null 2>&1; then
-            echo -e "  ${GREEN}✓ Successfully deleted${NC}"
-        else
-            echo -e "  ${YELLOW}⚠ Failed to delete (may be in use)${NC}"
-        fi
-        echo ""
+      # Delete the image
+      if docker rmi "$image_id" > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ Successfully deleted${NC}"
+      else
+        echo -e "  ${YELLOW}⚠ Failed to delete (may be in use)${NC}"
+      fi
+      echo ""
     fi
   else
     echo -e "${YELLOW}[KEEP]${NC} $image_name (ID: $image_id)"
@@ -153,9 +153,9 @@ done < <(
   docker images --format "table {{.ID}}|{{.Repository}}:{{.Tag}}|{{.Size}}" | tail -n +2 | while IFS='|' read -r id repo_tag size_str; do
     # Get image ID (full)
     image_id=$(docker images -q "$repo_tag" | head -1)
-    image_detail=$(docker inspect "$image_id" --format '{{.Size}}' 2>/dev/null || echo "0")
+    image_detail=$(docker inspect "$image_id" --format '{{.Size}}' 2> /dev/null || echo "0")
     size=$(echo "$image_detail" | head -1)
-    
+
     if [ -z "$size" ] || [ "$size" = "0" ]; then
       # Fallback: try to parse size string
       size_bytes=$(echo "$size_str" | sed 's/[^0-9]//g')
