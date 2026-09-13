@@ -15,6 +15,7 @@ import argparse
 import getpass
 import json
 import os
+import re
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -264,7 +265,9 @@ def npm_name(spec):
 def update_config(models, config_path, npm_package=None, provider_name=None, api_base_url=None):
     """Update the opencode.jsonc config with the given models."""
     with open(config_path) as f:
-        config = json.loads(strip_jsonc_comments(f.read()))
+        clean = strip_jsonc_comments(f.read())
+        clean = re.sub(r",\s*([}\]])", r"\1", clean)
+        config = json.loads(clean)
 
     provider_name = provider_name or PROVIDER_NAME
     api_base_url = api_base_url or API_BASE_URL
