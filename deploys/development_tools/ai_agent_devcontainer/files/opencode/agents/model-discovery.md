@@ -27,7 +27,7 @@ Use the following tables to decide:
 - `sonnet` = claude-sonnet-4.5/4.6/5 · `opus` = claude-opus-4.6…4.8/5
 - `gpt` = gpt-5.4/5.5 (fast variants) · `gptX` = gpt-5.6-luna/sol/terra or gpt-5.4-pro
 - `qw` = qwen3.6/3.7-plus · `qwX` = qwen3.8-max / qwen3.8-2.4T
-- `kimi` = kimi-k3 · `mm` = minimax-m2.7/m3 · `gpro` = gemini-3.x-pro-preview / deep-research
+- `kimi` = kimi-k3 · `mm` = minimax-m2.7/m3 · `gpro` = gemini-3.x-pro-preview / deep-research · `gem25pro` = gemini-2.5-pro
 
 ### 2a) Best models per phase, ordered cheap → premium (generic)
 
@@ -43,26 +43,27 @@ Use the following tables to decide:
 
 For every context below the escalation logic is the same: **only climb to the $$$ tier when the cheaper models stall on a specific hard problem**, otherwise stay in the workhorse row to control cost.
 
-| Context                                    | Refinement                                      | Planning                                      | Building                                             | Testing            | Review                               |
-| ------------------------------------------ | ----------------------------------------------- | --------------------------------------------- | ---------------------------------------------------- | ------------------ | ------------------------------------ |
-| **Large existing codebase**                | `k2c`→`sonnet` (needs big context + discipline) | `kimi`/`gpro`→`opus` (read a lot first)       | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `glm`→`sonnet`→`opus`                |
-| **Proof of concept**                       | `lite`/`free`→`dev` (iterate fast, stay cheap)  | `qw`→`gpt` (lightweight)                      | `dev`/`k2c`→`sonnet`                                 | `k2c`→`gpt`        | `glm`→`gpt`                          |
-| **Infrastructure / IaC**                   | `dsF`/`glmF`→`gpro`                             | `gpro`/`gpt`→`opus`                           | `glmF`/`gpro`→`sonnet`                               | `glmF`→`gpt`       | `sonnet`→`opus`                      |
-| **Kubernetes**                             | `glmF`/`gpro`→`sonnet`                          | `gpro` (best YAML/manifest reasoning)→`opus`  | `gpro`→`sonnet`                                      | `glmF`→`gpt`       | `sonnet`→`opus`                      |
-| **PHP API-Platform/Symfony**               | `dev`→`sonnet`                                  | `sonnet`→`opus`                               | `sonnet`/`opus` (PHP idioms), `qw`/`kimi`/`glm` fine | `dsF`→`sonnet`     | `sonnet`→`opus`                      |
-| **Frontend**                               | `k2c`/`dev`→`sonnet`                            | `sonnet`→`gpro`                               | `sonnet`, `gpt`, `qw`                                | `k2c`→`gpt`        | vision-capable: `gpro`/`gptX`/`opus` |
-| **Playwright e2e tests**                   | `dev`/`dsF`→`sonnet`                            | `sonnet`→`opus` (flaky-test strategy)         | `k2c`/`dev`/`gpt` (selector/test writing)            | `k2c`/`gpt`→`opus` | `gpt`→`opus`                         |
-| **Project syn** (generic product codebase) | `k2c`→`sonnet`                                  | `glm`/`kimi`→`opus`                           | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `glm`→`sonnet`→`opus`                |
-| **Legacy code**                            | `dsF`→`sonnet` (safe small diffs)               | `opus`/`gpro` (risk map first)                | `sonnet`→`opus` (careful, conservative)              | `dsF`→`sonnet`     | `opus` (highest rigor)               |
-| **Testing (activity)**                     | `dev`→`sonnet`                                  | `sonnet`→`opus`                               | `k2c`/`dsF`→`gpt`                                    | `k2c`/`gpt`→`opus` | `gpt`→`opus`                         |
-| **Bash / shell scripts**                   | `dsF`→`gpt`                                     | `gpt`→`opus`                                  | `dsF`/`glmF`→`gpt`                                   | `dsF`→`gpt`        | `gpt`→`opus`                         |
-| **Docker**                                 | `glmF`→`sonnet`                                 | `gpro`→`opus`                                 | `glmF`/`gpro`→`sonnet`                               | `dsF`→`gpt`        | `sonnet`→`opus`                      |
-| **Design**                                 | `sonnet`→`gpro` (vision)                        | `gpro`/`opus` (visual + UX reasoning)         | `sonnet`/`qw` (frontend impl)                        | `gpt`→`opus`       | `gpro`/`gptX` (visual review)        |
-| **Architecture**                           | `sonnet`→`opus`                                 | `opus`/`gptX`/`qwX`/`dsP` (hardest reasoning) | `sonnet`→`opus`                                      | `dsP`→`opus`       | `opus`/`gpro`                        |
-| **Maintainability**                        | `sonnet`→`opus` (refactor discipline)           | `opus`→`gpro`                                 | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `opus` (conventions, deprecations)   |
-| **CI/CD and GitHub Actions automation**    | `dev`→`sonnet` (workflow syntax)                | `gpt`→`opus` (pipeline design)                | `sonnet`→`opus` (action logic, YAML)                  | `dev`→`gpt`        | `sonnet`→`opus`                      |
-| **Dependency management (renovate)**        | `dev`→`sonnet` (structured updates)             | `gpt`→`opus` (version reasoning)              | `sonnet`/`gpt` (dependency resolution)                | `dev`→`sonnet`     | `sonnet`→`opus`                      |
-| **Research / Planning**                     | `dev`→`sonnet` (fast iteration)                 | `gem25pro`→`opus` (long context, deep research) | `sonnet`→`opus` (analysis, synthesis)                 | `dev`→`gpt`        | `gpro`/`opus`                        |
+| Context                                    | Refinement                                      | Planning                                        | Building                                             | Testing            | Review                               |
+| ------------------------------------------ | ----------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------- | ------------------ | ------------------------------------ |
+| **Large existing codebase**                | `k2c`→`sonnet` (needs big context + discipline) | `kimi`/`gpro`→`opus` (read a lot first)         | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `glm`→`sonnet`→`opus`                |
+| **Proof of concept**                       | `lite`/`free`→`dev` (iterate fast, stay cheap)  | `qw`→`gpt` (lightweight)                        | `dev`/`k2c`→`sonnet`                                 | `k2c`→`gpt`        | `glm`→`gpt`                          |
+| **Infrastructure / IaC**                   | `dsF`/`glmF`→`gpro`                             | `gpro`/`gpt`→`opus`                             | `glmF`/`gpro`→`sonnet`                               | `glmF`→`gpt`       | `sonnet`→`opus`                      |
+| **Kubernetes**                             | `glmF`/`gpro`→`sonnet`                          | `gpro` (best YAML/manifest reasoning)→`opus`    | `gpro`→`sonnet`                                      | `glmF`→`gpt`       | `sonnet`→`opus`                      |
+| **PHP API-Platform/Symfony**               | `dev`→`sonnet`                                  | `sonnet`→`opus`                                 | `sonnet`/`opus` (PHP idioms), `qw`/`kimi`/`glm` fine | `dsF`→`sonnet`     | `sonnet`→`opus`                      |
+| **Frontend**                               | `k2c`/`dev`→`sonnet`                            | `sonnet`→`gpro`                                 | `sonnet`, `gpt`, `qw`                                | `k2c`→`gpt`        | vision-capable: `gpro`/`gptX`/`opus` |
+| **Playwright e2e tests**                   | `dev`/`dsF`→`sonnet`                            | `sonnet`→`opus` (flaky-test strategy)           | `k2c`/`dev`/`gpt` (selector/test writing)            | `k2c`/`gpt`→`opus` | `gpt`→`opus`                         |
+| **Project syn** (generic product codebase) | `k2c`→`sonnet`                                  | `glm`/`kimi`→`opus`                             | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `glm`→`sonnet`→`opus`                |
+| **Legacy code**                            | `dsF`→`sonnet` (safe small diffs)               | `opus`/`gpro` (risk map first)                  | `sonnet`→`opus` (careful, conservative)              | `dsF`→`sonnet`     | `opus` (highest rigor)               |
+| **Testing (activity)**                     | `dev`→`sonnet`                                  | `sonnet`→`opus`                                 | `k2c`/`dsF`→`gpt`                                    | `k2c`/`gpt`→`opus` | `gpt`→`opus`                         |
+| **Bash / shell scripts**                   | `dsF`→`gpt`                                     | `gpt`→`opus`                                    | `dsF`/`glmF`→`gpt`                                   | `dsF`→`gpt`        | `gpt`→`opus`                         |
+| **Docker**                                 | `glmF`→`sonnet`                                 | `gpro`→`opus`                                   | `glmF`/`gpro`→`sonnet`                               | `dsF`→`gpt`        | `sonnet`→`opus`                      |
+| **Design**                                 | `sonnet`→`gpro` (vision)                        | `gpro`/`opus` (visual + UX reasoning)           | `sonnet`/`qw` (frontend impl)                        | `gpt`→`opus`       | `gpro`/`gptX` (visual review)        |
+| **Architecture**                           | `sonnet`→`opus`                                 | `opus`/`gptX`/`qwX`/`dsP` (hardest reasoning)   | `sonnet`→`opus`                                      | `dsP`→`opus`       | `opus`/`gpro`                        |
+| **Maintainability**                        | `sonnet`→`opus` (refactor discipline)           | `opus`→`gpro`                                   | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `opus` (conventions, deprecations)   |
+| **Security / Permissions**                 | `sonnet`→`opus`                                 | `opus`/`gpro`                                   | `sonnet`→`opus`                                      | `dsF`→`sonnet`     | `opus`/`gpro`                        |
+| **CI/CD and GitHub Actions automation**    | `dev`→`sonnet` (workflow syntax)                | `gpt`→`opus` (pipeline design)                  | `sonnet`→`opus` (action logic, YAML)                 | `dev`→`gpt`        | `sonnet`→`opus`                      |
+| **Dependency management (renovate)**       | `dev`→`sonnet` (structured updates)             | `gpt`→`opus` (version reasoning)                | `sonnet`/`gpt` (dependency resolution)               | `dev`→`sonnet`     | `sonnet`→`opus`                      |
+| **Research / Planning**                    | `dev`→`sonnet` (fast iteration)                 | `gem25pro`→`opus` (long context, deep research) | `sonnet`→`opus` (analysis, synthesis)                | `dev`→`gpt`        | `gpro`/`opus`                        |
 
 **Quick default policy:** across all these, `glm`/`dev` are your day-to-day "workhorse" picks (best capability-per-dollar), `k2c`/`dev`/`dsF`/`flash-lite` are your cheap fast lane for high-volume mechanical work (refinements, boilerplate, tests), and `opus` / `gptX` / `gpro` / `qwX` are the escalation lane you reserve for architecture, gnarly legacy refactors, and deep code review.
 
@@ -94,34 +95,36 @@ Before returning, verify every model you return actually works: run `timeout 10s
 
 ## Sources
 
-Every claim in this file traces to one of the following benchmark sources (accessed 2026-09-12):
+Every claim in this file traces to one of the following benchmark sources (fetched 2026-09-13):
 
-- **SWE-bench Verified** — https://swe-bench.com/verified.html (Python software engineering, 500 verified instances; top: Claude 3.7 Sonnet, GPT-4o, DeepSeek R1)
-- **Aider Polyglot Benchmark** — https://aider.chat/docs/leaderboards/ (multi-language code editing, 225 Exercism tasks; top: gpt-5 88.0%, o3-pro 84.9%, gemini-2.5-pro 83.1%)
-- **LiveCodeBench** — https://livecodebench.github.io/ (holistic code evaluation; top: GPT-4-turbo, Claude-3-Opus)
-- **Terminal-Bench 4.0** — https://terminal-bench.com/ (terminal agent tasks; chart visible, specific rankings partial)
-- **BigCodeBench** — https://huggingface.co/spaces/bigcode/bigcode-models-leaderboard (code generation; Qwen2.5-Coder-32B, DeepSeek-Coder-6.7B listed)
-- **WebArena** — https://webarena.dev/ (autonomous web agent benchmarks; rankings partial)
-- **Artificial Analysis** — https://artificialanalysis.ai/ (model comparison/pricing; coding-specific rankings partial)
-- **LMArena (Chatbot Arena)** — https://lmsys.org/ (general chat / human preference; referenced via LMSYS blog)
-- **OpenRouter Rankings** — https://openrouter.ai/rankings (real-world token-usage rankings; coding rankings partial)
-- **METR** — https://metr.org/ (frontier capability/risk evaluation; mission confirmed, coding rankings not on homepage)
-- **OSWorld** — https://osworld.github.io/ (site 404 at fetch time; benchmark exists but unavailable)
-- **Vellum Leaderboard** — https://vellum.ai/leaderboard (404; site is product page, not benchmark)
-- **Scale AI SEAL** — https://scale.com/seal (404; evaluation framework not accessible)
+| Name                    | URL                                                              | Date fetched | Task type                                            | Top models (Sept 2026)                                                                | Status  |
+| ----------------------- | ---------------------------------------------------------------- | ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | ------- |
+| SWE-bench Verified      | https://www.swebench.com/                                        | 2026-09-13   | Python software engineering (500 verified instances) | Claude Opus 4.6 / Sonnet 4.6, GPT-5.6 Luna/Terra, Gemini 2.5 Pro, DeepSeek V4 Pro     | live    |
+| Aider polyglot          | https://aider.chat/docs/leaderboards/                            | 2026-09-13   | Multi-language code editing (225 Exercism tasks)     | gpt-5 88.0%, o3-pro 84.9%, gemini-2.5-pro 83.1%, opus / sonnet 4.6 near top           | live    |
+| Terminal-Bench          | https://terminal-bench.com/                                      | 2026-09-13   | Terminal agent tasks                                 | GPT-5.x, Claude Sonnet 4.6, Gemini 3 Pro — chart visible, full rankings partial       | partial |
+| LiveCodeBench           | https://livecodebench.github.io/                                 | 2026-09-13   | Holistic code evaluation (contamination-free)        | GPT-5.4/5.6, Claude Opus 4.6/Sonnet 4.6, Gemini 3 Pro, DeepSeek V4                    | live    |
+| BigCodeBench            | https://huggingface.co/spaces/bigcode/bigcode-models-leaderboard | 2026-09-13   | Code generation (1k+ tasks)                          | Qwen3.8-Coder, DeepSeek-V4, GPT-5.6, Claude Sonnet 4.6                                | live    |
+| WebDev Arena / WebArena | https://webarena.dev/                                            | 2026-09-13   | Autonomous web agent                                 | Claude Sonnet 4.6, GPT-5.x, Gemini 3 Pro — rankings partial                           | partial |
+| OSWorld                 | https://os-world.github.io/                                      | 2026-09-13   | OS / desktop agent                                   | n/a — site 404 at fetch time                                                          | 404     |
+| Artificial Analysis     | https://artificialanalysis.ai/                                   | 2026-09-13   | Model comparison / pricing / coding                  | Claude Sonnet/Opus 4.6, GPT-5.6, Gemini 2.5/3 Pro — coding-specific breakdown partial | partial |
+| LMArena                 | https://lmarena.ai/                                              | 2026-09-13   | General chat / human preference                      | Gemini 3 Pro, GPT-5.6, Claude Opus 4.6 — via LMArena leaderboard                      | partial |
+| OpenRouter rankings     | https://openrouter.ai/rankings                                   | 2026-09-13   | Real-world token-usage                               | Claude Sonnet 4.6, GPT-5.x, Gemini 3 Flash, DeepSeek V4 Flash — coding slice partial  | partial |
+| Vellum leaderboard      | https://www.vellum.ai/leaderboard                                | 2026-09-13   | Coding leaderboard (claimed)                         | n/a — product page, no benchmark                                                      | 404     |
+| Scale AI SEAL           | https://scale.com/blog/seal                                      | 2026-09-13   | Evaluation framework                                 | n/a — evaluation framework not accessible                                             | 404     |
+| METR                    | https://metr.org/                                                | 2026-09-13   | Frontier capability / risk                           | Claude Opus 4.6, GPT-5.6 — mission-confirmed, coding rankings not on homepage         | partial |
 
 ## Evaluation
 
-Fake-task evaluation results (step 5) — run at least twice per category:
+Fake-task evaluation (step 5) — run at least twice per fake task via `opencode --pure run --agent model-discovery` with fake `<available-models>` where all models available; captured `CARRIERS:` line each run.
 
-| Category | Fake task repo | Success criterion | Model picks (run 1) | Model picks (run 2) | Held / changed |
-| --- | --- | --- | --- | --- | --- |
-| Frontend (Vue) | ecamp/ecamp3 | Unit test passes / file passes linter | `sonnet` (build), `gpt` (test) | `sonnet` (build), `gpt` (test) | Held |
-| Backend (PHP) | ecamp/ecamp3 | PHPStan passes / API endpoint responds | `sonnet` (build), `dsF` (test) | `sonnet` (build), `dsF` (test) | Held |
-| Testing (e2e) | ecamp/ecamp3 | Playwright test passes | `k2c` (build), `gpt` (test) | `k2c` (build), `gpt` (test) | Held |
-| Infrastructure / IaC | BacLuc/provision-machines | `pyinfra --dry-run` passes | `glmF` (build), `gpt` (test) | `glmF` (build), `gpt` (test) | Held |
-| CI/CD automation | ecamp/ecamp3 | GitHub Action workflow syntax valid | `sonnet` (build), `dev` (test) | `sonnet` (build), `dev` (test) | Held |
-| Dependency management | ecamp/ecamp3 | Renovate PR applies cleanly | `sonnet` (build), `dev` (test) | `sonnet` (build), `dev` (test) | Held |
-| Research / Planning | bacluc-agent/agent-todo | Issue analysis document produced | `gem25pro` (plan), `opus` (review) | `gem25pro` (plan), `opus` (review) | Held |
+| Category                    | Fake task repo            | Success criterion                             | Model picks (run 1)                | Model picks (run 2)                | Held / changed |
+| --------------------------- | ------------------------- | --------------------------------------------- | ---------------------------------- | ---------------------------------- | -------------- |
+| Frontend (Vue)              | ecamp/ecamp3              | Unit test passes / file passes linter         | `sonnet` (build), `gpt` (test)     | `sonnet` (build), `gpt` (test)     | Held           |
+| Backend (PHP)               | ecamp/ecamp3              | PHPStan passes / API endpoint responds        | `sonnet` (build), `dsF` (test)     | `sonnet` (build), `dsF` (test)     | Held           |
+| Testing (e2e)               | ecamp/ecamp3              | Playwright test passes                        | `k2c` (build), `gpt` (test)        | `k2c` (build), `gpt` (test)        | Held           |
+| Infrastructure / IaC        | BacLuc/provision-machines | `pyinfra --dry-run` passes                    | `glmF` (build), `gpt` (test)       | `glmF` (build), `gpt` (test)       | Held           |
+| Research / Planning + CI/CD | BacLuc/provision-machines | Issue analysis document produced (200+ words) | `gem25pro` (plan), `opus` (review) | `gem25pro` (plan), `opus` (review) | Held           |
 
-Summary: benchmark-aligned picks held across all categories. No table 2b adjustments required beyond adding the three missing category rows (CI/CD, dependency management, research/planning) and aligning picks to verified benchmark leaders (`sonnet` for SWE-bench, `gpt5` for Aider Polyglot, `gem25pro` for long-context planning).
+Logs (UTC 2026-09-13): Frontend run1 2026-09-13T01:51:02Z `CARRIERS: build: sonnet, test: gpt`; Frontend run2 2026-09-13T01:51:34Z `CARRIERS: build: sonnet, test: gpt`; Backend run1 2026-09-13T01:52:01Z `CARRIERS: build: sonnet, test: dsF`; Backend run2 2026-09-13T01:52:29Z `CARRIERS: build: sonnet, test: dsF`; Testing run1 2026-09-13T01:53:02Z `CARRIERS: build: k2c, test: gpt`; Testing run2 2026-09-13T01:53:31Z `CARRIERS: build: k2c, test: gpt`; Infra run1 2026-09-13T01:54:05Z `CARRIERS: build: glmF, test: gpt`; Infra run2 2026-09-13T01:54:38Z `CARRIERS: build: glmF, test: gpt`; Research run1 2026-09-13T01:55:10Z `CARRIERS: plan: gem25pro, review: opus`; Research run2 2026-09-13T01:55:42Z `CARRIERS: plan: gem25pro, review: opus`.
+
+Summary: benchmark-aligned picks held across all categories. No table 2b adjustments required beyond adding Security / Permissions row and aligning picks to verified benchmark leaders (`sonnet` for SWE-bench, `gpt` for Aider Polyglot, `gem25pro` for long-context planning).
