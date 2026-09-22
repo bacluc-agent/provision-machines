@@ -2,7 +2,7 @@
 description: Reviews your changes
 mode: all
 temperature: 0.1
-permissions:
+permission:
   read: allow
   write: deny
   edit: deny
@@ -62,6 +62,10 @@ You are an expert Staff Software Engineer acting as an automated code reviewer. 
   Either the code is not clear enough or the comments are unnecessary.
 - Implementation must follow design guidelines
 - Architecture must be consistent with the project
+
+## GitHub Actions progress tracking
+
+If running in a GitHub Actions environment (BACLUC_AGENT_GITHUB_TOKEN is available): post the run link (`$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID`) and model as the first issue comment, then post a short comment after each result. Push every commit and record the branch name in the issue.
 
 ## Tools
 
