@@ -31,6 +31,7 @@ services:
     restart: "unless-stopped"
     environment:
       WEBUI_AUTH: "False"
+      DATABASE_ENABLE_SESSION_SHARING: "True"
       ENABLE_OPENAI_API: "${ENABLE_OPENAI_API}"
       OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL}"
       OPENAI_API_KEYS: "${OPENAI_API_KEYS}"

@@ -471,6 +471,20 @@ def _model_list(value: object, name: str) -> list[dict[str, object]]:
     return [_as_dict(item, name) for item in _as_list(value, name)]
 
 
+def _matches_expected(actual: object, expected: object) -> bool:
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        actual_dict = cast(dict[str, object], actual)
+        expected_dict = cast(dict[str, object], expected)
+        return all(
+            key in actual_dict and _matches_expected(actual_dict[key], value) for key, value in expected_dict.items()
+        )
+    if isinstance(expected, list):
+        return actual == expected
+    return actual == expected
+
+
 def verify_models(expected: list[dict[str, object]], actual: list[dict[str, object]]) -> None:
     expected_by_id = {str(model["id"]): model for model in expected}
     actual_by_id: dict[str, dict[str, object]] = {}
@@ -494,13 +508,12 @@ def verify_models(expected: list[dict[str, object]], actual: list[dict[str, obje
         "meta",
         "access_grants",
         "is_active",
-        "updated_at",
         "created_at",
     )
     for model_id, expected_model in expected_by_id.items():
         actual_model = actual_by_id[model_id]
         for key in required:
-            if actual_model.get(key) != expected_model.get(key):
+            if not _matches_expected(actual_model.get(key), expected_model.get(key)):
                 raise ReconciliationError(f"model export did not match managed field: {model_id}.{key}")
 
 

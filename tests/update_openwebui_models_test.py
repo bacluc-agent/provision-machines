@@ -290,6 +290,7 @@ def test_compose_renders_aisix_gateway_and_openwebui_contract() -> None:
     assert openwebui["image"] == "ghcr.io/open-webui/open-webui:v0.11.4"
     assert openwebui["environment"] == {
         "WEBUI_AUTH": "False",
+        "DATABASE_ENABLE_SESSION_SHARING": "True",
         "ENABLE_OPENAI_API": "true",
         "OPENAI_API_BASE_URL": "http://aisix:3000/v1",
         "OPENAI_API_KEYS": "test-caller-key",
@@ -568,6 +569,41 @@ def test_verify_models_reports_missing_managed_id_even_with_extra_rows() -> None
 
     with pytest.raises(RuntimeError, match="missing"):
         verify_models(expected, actual)
+
+
+def test_verify_models_allows_server_added_meta_defaults() -> None:
+    reconciler = load_reconciler()
+    build_models = require_callable(reconciler, "build_models")
+    verify_models = require_callable(reconciler, "verify_models")
+    all_data = load_all_module("verify_meta_source")
+    manifest = {
+        "default_models": all_data.openwebui["default_models"],
+        "model_map": all_data.openwebui["model_map"],
+        "presets": all_data.openwebui["presets"],
+    }
+    expected = build_models(manifest, [], user_id="admin-user", now=1)
+    actual = copy.deepcopy(expected)
+    actual[0]["meta"]["description"] = "server default"
+    actual[0]["meta"]["profile_image_url"] = None
+
+    verify_models(expected, actual)
+
+
+def test_verify_models_allows_server_updated_timestamp() -> None:
+    reconciler = load_reconciler()
+    build_models = require_callable(reconciler, "build_models")
+    verify_models = require_callable(reconciler, "verify_models")
+    all_data = load_all_module("verify_timestamp_source")
+    manifest = {
+        "default_models": all_data.openwebui["default_models"],
+        "model_map": all_data.openwebui["model_map"],
+        "presets": all_data.openwebui["presets"],
+    }
+    expected = build_models(manifest, [], user_id="admin-user", now=1)
+    actual = copy.deepcopy(expected)
+    actual[0]["updated_at"] = 2
+
+    verify_models(expected, actual)
 
 
 def test_read_env_file_requires_private_mode(tmp_path: Path) -> None:
