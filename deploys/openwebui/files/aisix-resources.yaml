@@ -1,0 +1,161 @@
+_format_version: "1"
+provider_keys:
+  - display_name: zen
+    provider: opencode
+    adapter: openai
+    api_key: ${ZEN_API_KEY}
+    api_base: ${ZEN_API_BASE}
+  - display_name: ollama
+    provider: ollama
+    adapter: openai
+    api_key: ${OLLAMA_API_KEY}
+    api_base: ${OLLAMA_API_BASE}
+models:
+  - display_name: zen-chat
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: zen-thinking
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: zen-web
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: zen-translation
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: zen-grammar
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: zen-linux
+    provider: opencode
+    model_name: ${ZEN_MODEL}
+    provider_key: zen
+  - display_name: ollama-chat
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: ollama-thinking
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: ollama-web
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: ollama-translation
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: ollama-grammar
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: ollama-linux
+    provider: ollama
+    model_name: ${OLLAMA_MODEL}
+    provider_key: ollama
+  - display_name: router-chat
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-chat
+          priority: 10
+        - model: ollama-chat
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-chat-thinking
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-thinking
+          priority: 10
+        - model: ollama-thinking
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-web-research
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-web
+          priority: 10
+        - model: ollama-web
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-translate-de
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-translation
+          priority: 10
+        - model: ollama-translation
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-translate-en
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-translation
+          priority: 10
+        - model: ollama-translation
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-fix-grammar-en
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-grammar
+          priority: 10
+        - model: ollama-grammar
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-fix-grammar-de
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-grammar
+          priority: 10
+        - model: ollama-grammar
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+  - display_name: router-linux-cli
+    routing:
+      strategy: failover
+      targets:
+        - model: zen-linux
+          priority: 10
+        - model: ollama-linux
+          priority: -10
+      retries: 0
+      max_fallbacks: 1
+      retry_on_429: true
+api_keys:
+  - display_name: openwebui
+    key_env: OPENWEBUI_CALLER_KEY
+    allowed_models:
+      - router-chat
+      - router-chat-thinking
+      - router-web-research
+      - router-translate-de
+      - router-translate-en
+      - router-fix-grammar-en
+      - router-fix-grammar-de
+      - router-linux-cli

@@ -1,5 +1,24 @@
 ---
 services:
+  aisix:
+    image: "ghcr.io/api7/aisix:${AISIX_VERSION}"
+    container_name: "aisix"
+    expose:
+      - "3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "./aisix-config.yaml:/etc/aisix/config.yaml:ro"
+      - "./aisix-resources.yaml:/etc/aisix/resources.yaml:ro"
+    restart: "unless-stopped"
+    environment:
+      ZEN_API_KEY: "${ZEN_API_KEY}"
+      ZEN_API_BASE: "${ZEN_API_BASE}"
+      ZEN_MODEL: "${ZEN_MODEL}"
+      OLLAMA_API_KEY: "${OLLAMA_API_KEY}"
+      OLLAMA_API_BASE: "${OLLAMA_API_BASE}"
+      OLLAMA_MODEL: "${OLLAMA_MODEL}"
+      OPENWEBUI_CALLER_KEY: "${OPENWEBUI_CALLER_KEY}"
   open-webui:
     image: "ghcr.io/open-webui/open-webui:v0.11.4"
     container_name: "open-webui"
@@ -11,7 +30,13 @@ services:
       - "open-webui:/app/backend/data"
     restart: "unless-stopped"
     environment:
-      - "WEBUI_AUTH=False"
+      WEBUI_AUTH: "False"
+      ENABLE_OPENAI_API: "${ENABLE_OPENAI_API}"
+      OPENAI_API_BASE_URL: "${OPENAI_API_BASE_URL}"
+      OPENAI_API_KEYS: "${OPENAI_API_KEYS}"
+      DEFAULT_MODELS: "${DEFAULT_MODELS}"
+      ENABLE_MODEL_FILTER: "${ENABLE_MODEL_FILTER}"
+      MODEL_FILTER_LIST: "${MODEL_FILTER_LIST}"
   searxng:
     image: ghcr.io/searxng/searxng:2026.2.16-8e824017d
     ports:
