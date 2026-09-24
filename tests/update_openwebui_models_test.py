@@ -4,6 +4,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
@@ -38,6 +39,8 @@ ROUTER_MODEL_IDS = [
 ]
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT_PATH = os.path.join(ROOT, "scripts", "update-openwebui-models.py")
+RENDER_PATH = os.path.join(ROOT, "deploys", "openwebui", "render.py")
+DEPLOY_PATH = os.path.join(ROOT, "deploys", "openwebui", "deploy.py")
 
 
 def load_module(name: str, path: str) -> ModuleType:
@@ -144,6 +147,20 @@ class ModelApiOpener:
 def load_reconciler() -> ModuleType:
     assert os.path.isfile(SCRIPT_PATH)
     return load_module("update_openwebui_models", SCRIPT_PATH)
+
+
+def load_render() -> ModuleType:
+    assert os.path.isfile(RENDER_PATH)
+    return load_module("openwebui_render", RENDER_PATH)
+
+
+def load_deploy() -> ModuleType:
+    assert os.path.isfile(DEPLOY_PATH)
+    sys.path.insert(0, ROOT)
+    try:
+        return load_module("openwebui_deploy", DEPLOY_PATH)
+    finally:
+        sys.path.remove(ROOT)
 
 
 def require_callable(module: ModuleType, name: str) -> Callable[..., Any]:
@@ -394,6 +411,13 @@ def test_manifest_loader_and_router_validation(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         validate(invalid_manifest, routes)
 
+    secret_manifest = json.loads(json.dumps(manifest))
+    secret_manifest["presets"][0]["api_key"] = "secret"
+    secret_manifest_path = tmp_path / "secret-manifest.json"
+    secret_manifest_path.write_text(json.dumps(secret_manifest))
+    with pytest.raises(ValueError):
+        load_manifest(secret_manifest_path)
+
 
 def test_build_models_matches_eight_fixed_payload_contract() -> None:
     reconciler = load_reconciler()
@@ -631,6 +655,25 @@ def test_wait_ready_retries_transient_failures_with_bounded_backoff() -> None:
     assert sleeps == [0.5, 1.0]
 
 
+def test_wait_ready_caps_exponential_backoff() -> None:
+    reconciler = load_reconciler()
+    wait_ready = require_callable(reconciler, "wait_ready")
+    opener = RecordingOpener([URLError("not ready") for _ in range(6)])
+    sleeps: list[float] = []
+
+    with pytest.raises(RuntimeError):
+        wait_ready(
+            "http://127.0.0.1:13307",
+            {},
+            attempts=6,
+            backoff=5,
+            opener=opener,
+            sleep=sleeps.append,
+        )
+
+    assert max(sleeps) <= 30
+
+
 def test_reconcile_exports_syncs_verifies_and_is_idempotent(tmp_path: Path) -> None:
     reconciler = load_reconciler()
     reconcile = require_callable(reconciler, "reconcile")
@@ -816,3 +859,309 @@ def test_reconcile_import_fallback_deletes_stale_exported_ids(tmp_path: Path, st
     assert opener.deleted == ["stale-model"]
     imported_models = cast(list[dict[str, object]], opener.import_payloads[0]["models"])
     assert [model["id"] for model in imported_models] == MODEL_IDS
+
+
+def test_cli_uses_default_url_and_passes_manifest_paths(tmp_path: Path) -> None:
+    reconciler = load_reconciler()
+    main = require_callable(reconciler, "main")
+    all_data = load_all_module("cli_source")
+    manifest = {
+        "default_models": all_data.openwebui["default_models"],
+        "model_map": all_data.openwebui["model_map"],
+        "presets": all_data.openwebui["presets"],
+    }
+    manifest_path = tmp_path / "openwebui-models.json"
+    manifest_path.write_text(json.dumps(manifest))
+    env_path = tmp_path / ".env"
+    env_path.write_text("OPENWEBUI_ADMIN_API_KEY=test-secret\n")
+    env_path.chmod(0o600)
+    resources_path = Path(ROOT) / "deploys" / "openwebui" / "files" / "aisix-resources.yaml"
+    calls: list[tuple[str, str, str, str]] = []
+
+    def fake_reconcile(
+        url: str, loaded_manifest: dict[str, object], resources: Path, env: Path
+    ) -> list[dict[str, object]]:
+        del loaded_manifest
+        calls.append((url, str(resources), str(env), ""))
+        return []
+
+    vars(reconciler)["reconcile"] = fake_reconcile
+    assert (
+        main(
+            [
+                "--manifest",
+                str(manifest_path),
+                "--resources",
+                str(resources_path),
+                "--env-file",
+                str(env_path),
+            ]
+        )
+        == 0
+    )
+    assert calls == [("http://127.0.0.1:13307", str(resources_path), str(env_path), "")]
+
+
+def test_cli_failure_does_not_print_secret_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    reconciler = load_reconciler()
+    main = require_callable(reconciler, "main")
+    all_data = load_all_module("cli_failure_source")
+    manifest = {
+        "default_models": all_data.openwebui["default_models"],
+        "model_map": all_data.openwebui["model_map"],
+        "presets": all_data.openwebui["presets"],
+    }
+    manifest_path = tmp_path / "openwebui-models.json"
+    manifest_path.write_text(json.dumps(manifest))
+    env_path = tmp_path / ".env"
+    env_path.write_text("OPENWEBUI_ADMIN_API_KEY=test-secret\n")
+    env_path.chmod(0o600)
+    resources_path = Path(ROOT) / "deploys" / "openwebui" / "files" / "aisix-resources.yaml"
+
+    def fail_reconcile(*_args: object, **_kwargs: object) -> list[dict[str, object]]:
+        error_type = cast(type[Exception], vars(reconciler)["ReconciliationError"])
+        raise error_type("token=test-secret")
+
+    vars(reconciler)["reconcile"] = fail_reconcile
+    assert (
+        main(
+            [
+                "--manifest",
+                str(manifest_path),
+                "--resources",
+                str(resources_path),
+                "--env-file",
+                str(env_path),
+            ]
+        )
+        == 1
+    )
+    assert "test-secret" not in capsys.readouterr().err
+
+
+def test_render_helpers_quote_env_and_build_safe_reconciliation_command() -> None:
+    render = load_render()
+    render_env = require_callable(render, "render_env")
+    render_manifest = require_callable(render, "render_manifest")
+    render_compose = require_callable(render, "render_compose")
+    reconciliation_command = require_callable(render, "reconciliation_command")
+    all_data = load_all_module("render_source")
+    data = dict(all_data.openwebui)
+    data["BRAVE_API_KEY"] = "brave secret$"
+    data["ZEN_API_KEY"] = "zen secret$"
+    data["OPENWEBUI_CALLER_KEY"] = "caller secret$"
+    data["OPENWEBUI_ADMIN_API_KEY"] = "admin secret$"
+
+    env = render_env(data, "1.4.0")
+    env_values = dict(line.split("=", 1) for line in env.splitlines())
+    assert env_values["AISIX_VERSION"] == "1.4.0"
+    assert env_values["OPENAI_API_KEYS"] == '"${OPENWEBUI_CALLER_KEY}"'
+    assert "brave secret$" in env_values["BRAVE_API_KEY"]
+    assert "caller secret$" in env_values["OPENWEBUI_CALLER_KEY"]
+    assert "admin secret$" in env_values["OPENWEBUI_ADMIN_API_KEY"]
+
+    manifest = json.loads(render_manifest(data))
+    assert set(manifest) == {"default_models", "model_map", "presets"}
+    assert "ZEN_API_KEY" not in json.dumps(manifest)
+    compose = render_compose(os.path.join(ROOT, "deploys", "openwebui", "files", "docker-compose.yml"), "1.4.0")
+    assert "ghcr.io/api7/aisix:1.4.0" in compose
+    assert "${AISIX_VERSION}" not in compose
+    assert '"./aisix-config.yaml:/etc/aisix/config.yaml:ro"' in compose
+    assert '"./aisix-resources.yaml:/etc/aisix/resources.yaml:ro"' in compose
+    assert "/tmp/opencode" not in compose
+
+    command = reconciliation_command("/home/user/open webui")
+    assert "'/home/user/open webui/update-openwebui-models.py'" in command
+    assert "'/home/user/open webui/openwebui-models.json'" in command
+    assert "docker kill --signal=HUP aisix" in command
+    assert "update-openwebui-models.py" in command
+    assert " source " not in command
+    assert "eval " not in command
+    assert "|| true" not in command
+    assert "admin secret" not in command
+    assert "OPENWEBUI_ADMIN_API_KEY" not in command
+
+
+def test_rendered_env_and_compose_configure_together(tmp_path: Path) -> None:
+    render = load_render()
+    render_env = require_callable(render, "render_env")
+    render_compose = require_callable(render, "render_compose")
+    all_data = load_all_module("render_compose_source")
+    data = dict(all_data.openwebui)
+    data["BRAVE_API_KEY"] = "test-brave"
+    data["ZEN_API_KEY"] = "test-zen"
+    data["OLLAMA_API_KEY"] = "test-ollama"
+    data["OPENWEBUI_CALLER_KEY"] = "test caller$"
+    (tmp_path / ".env").write_text(render_env(data, "1.4.0"))
+    (tmp_path / ".env").chmod(0o600)
+    compose_path = tmp_path / "docker-compose.yml"
+    compose_path.write_text(
+        render_compose(os.path.join(ROOT, "deploys", "openwebui", "files", "docker-compose.yml"), "1.4.0")
+    )
+
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(compose_path), "config", "--format", "json"],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    services = json.loads(result.stdout)["services"]
+    assert services["open-webui"]["environment"]["OPENAI_API_KEYS"] == "test caller$$"
+    assert services["aisix"]["environment"]["OPENWEBUI_CALLER_KEY"] == "test caller$$"
+
+
+def test_openwebui_deploy_orders_aisix_files_and_reconciliation(tmp_path: Path) -> None:
+    all_data = load_all_module("deploy_order_source")
+    openwebui = dict(all_data.openwebui)
+    openwebui["enabled"] = True
+    openwebui["compose_project_dir"] = str(tmp_path / "openwebui project")
+    inventory_path = tmp_path / "inventory.py"
+    inventory_path.write_text(f'all = [("@local", {{"openwebui": {openwebui!r}}})]\n')
+    environment = os.environ.copy()
+    environment.pop("CI", None)
+
+    result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "pyinfra",
+            str(inventory_path),
+            "deploys/openwebui/deploy.py",
+            "--dry",
+            "--debug-operations",
+            "-y",
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected_names = [
+        "Deploy docker-compose.yml",
+        "Deploy .env",
+        "Deploy aisix-config.yaml",
+        "Deploy aisix-resources.yaml",
+        "Deploy openwebui-models.json",
+        "Deploy update-openwebui-models.py",
+        "Deploy systemd service file",
+        "Restart docker before starting openwebui to ensure iptables chains exist",
+        "Enable and start openwebui service",
+        "Reconcile OpenWebUI models",
+    ]
+    output = result.stdout + result.stderr
+    missing = [name for name in expected_names if name not in output]
+    assert not missing, output
+    positions = [output.index(name) for name in expected_names]
+    assert positions == sorted(positions)
+
+
+def test_openwebui_deploy_uses_private_env_restart_conditions_and_safe_post_service_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deploy = load_deploy()
+    deploy_openwebui = require_callable(deploy, "deploy_openwebui")
+    all_data = load_all_module("deploy_wiring_source")
+    data = dict(all_data.openwebui)
+    data["compose_project_dir"] = "/home/user/open webui"
+    data["BRAVE_API_KEY"] = "brave secret"
+
+    class Meta:
+        def __init__(self) -> None:
+            self.changed = False
+
+    class Files:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+            self.metas: list[Meta] = []
+            self.puts: list[dict[str, Any]] = []
+
+        def directory(self, **kwargs: Any) -> Meta:
+            del kwargs
+            self.events.append("Create compose project directory")
+            meta = Meta()
+            self.metas.append(meta)
+            return meta
+
+        def sync(self, **kwargs: Any) -> Meta:
+            del kwargs
+            self.events.append("Copy searngx directory")
+            meta = Meta()
+            self.metas.append(meta)
+            return meta
+
+        def put(self, **kwargs: Any) -> Meta:
+            self.events.append(kwargs["name"])
+            self.puts.append(kwargs)
+            meta = Meta()
+            self.metas.append(meta)
+            return meta
+
+        def file(self, **kwargs: Any) -> None:
+            del kwargs
+            raise AssertionError("stale env removal must not be used")
+
+    class Server:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+            self.calls: list[dict[str, Any]] = []
+
+        def shell(self, **kwargs: Any) -> None:
+            self.events.append(kwargs["name"])
+            self.calls.append(kwargs)
+
+    class Systemd:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+            self.call: dict[str, Any] = {}
+
+        def service(self, **kwargs: Any) -> None:
+            self.events.append(kwargs["name"])
+            self.call = kwargs
+
+    files = Files()
+    server = Server()
+    systemd = Systemd()
+    monkeypatch.setattr(deploy, "files", files)
+    monkeypatch.setattr(deploy, "server", server)
+    monkeypatch.setattr(deploy, "systemd", systemd)
+
+    deploy_openwebui(data, "user")
+
+    assert files.events == [
+        "Create compose project directory",
+        "Copy searngx directory",
+        "Deploy searxng settings.yml",
+        "Deploy docker-compose.yml",
+        "Deploy .env",
+        "Deploy aisix-config.yaml",
+        "Deploy aisix-resources.yaml",
+        "Deploy openwebui-models.json",
+        "Deploy update-openwebui-models.py",
+        "Deploy systemd service file",
+    ]
+    assert server.events == [
+        "Create docker volume",
+        "Restart docker before starting openwebui to ensure iptables chains exist",
+        "Reconcile OpenWebUI models",
+    ]
+    assert systemd.events == ["Enable and start openwebui service"]
+    puts = {put["name"]: put for put in files.puts}
+    assert puts["Deploy .env"]["mode"] == "600"
+    assert puts["Deploy update-openwebui-models.py"]["mode"] == "755"
+    assert puts["Deploy aisix-config.yaml"]["mode"] == "644"
+    assert "brave secret" not in puts["Deploy .env"]["name"]
+    assert server.calls[-1]["commands"][0].startswith(
+        "systemctl start openwebui.service && docker kill --signal=HUP aisix"
+    )
+    restart_condition = server.calls[1]["_if"]
+    assert not restart_condition()
+    for meta in files.metas:
+        meta.changed = True
+        assert restart_condition()
+        meta.changed = False

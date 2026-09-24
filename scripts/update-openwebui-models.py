@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
 import stat
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -93,13 +95,21 @@ def _manifest_parts(manifest: dict[str, object]) -> tuple[list[str], dict[str, s
     return default_models, model_map, presets
 
 
+def _reject_secret_fields(value: object) -> None:
+    if isinstance(value, dict):
+        for key, child in cast(dict[str, object], value).items():
+            if any(word in key.lower() for word in ("key", "token", "secret", "password")):
+                raise ValueError("manifest must not contain secret fields")
+            _reject_secret_fields(child)
+    elif isinstance(value, list):
+        for child in cast(list[object], value):
+            _reject_secret_fields(child)
+
+
 def load_manifest(path: str | os.PathLike[str]) -> dict[str, object]:
     value: object = json.loads(Path(path).read_text(encoding="utf-8"))
     manifest = _as_dict(value, "manifest")
-    forbidden = ("key", "token", "secret", "password")
-    for key in manifest:
-        if any(word in key.lower() for word in forbidden):
-            raise ValueError("manifest must not contain secret fields")
+    _reject_secret_fields(manifest)
     _manifest_parts(manifest)
     return manifest
 
@@ -454,7 +464,7 @@ def wait_ready(
         except ReconciliationError:
             if attempt + 1 == attempts:
                 raise ReconciliationError("OpenWebUI did not become ready") from None
-            sleep(backoff * (2**attempt))
+            sleep(min(backoff * (2**attempt), 30))
 
 
 def _model_list(value: object, name: str) -> list[dict[str, object]]:
@@ -562,3 +572,23 @@ def reconcile(
     )
     verify_models(desired, actual)
     return actual
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Reconcile OpenWebUI model presets through AISIX")
+    parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--manifest", required=True)
+    parser.add_argument("--resources", required=True)
+    parser.add_argument("--env-file", required=True)
+    args = parser.parse_args(argv)
+    try:
+        manifest = load_manifest(args.manifest)
+        reconcile(args.url, manifest, Path(args.resources), Path(args.env_file))
+    except (OSError, ValueError, ReconciliationError):
+        print("OpenWebUI model reconciliation failed", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
