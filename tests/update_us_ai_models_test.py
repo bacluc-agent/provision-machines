@@ -69,13 +69,47 @@ def test_update_config_parses_the_repo_jsonc_files(tmp_path: Path) -> None:
             target.write_text(f.read())
         mod.update_config([{"id": "byusage.example/model", "name": "Model"}], config_path=target)
         with open(target) as f:
-            config = json.loads(f.read())
+            config = json.loads(mod.normalize_jsonc(f.read()))
         assert config["provider"]["vshn-us-ai"]["models"] == {
             "byusage.example/model": {"name": "Model"},
         }
 
 
+def test_update_config_preserves_jsonc_comments_and_formatting(tmp_path: Path) -> None:
+    config = tmp_path / "config.jsonc"
+    original = """{
+  // keep this comment
+  "provider": {
+    // keep this provider comment
+    "other": {"models": {"keep": {"name": "Keep"}}},
+    "vshn-us-ai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "VSHN US AI",
+      "models": {
+        "old": {"name": "Old"},
+      },
+    },
+  },
+  // renovate: datasource=npm depName=example
+  "plugin": ["example@1.0.0"],
+}
+"""
+    config.write_text(original)
+
+    mod.update_config([{"id": "new/model", "name": "New"}], config_path=config)
+
+    result = config.read_text()
+    assert "// keep this comment" in result
+    assert "// keep this provider comment" in result
+    assert "// renovate: datasource=npm depName=example" in result
+    assert '"plugin": ["example@1.0.0"]' in result
+    assert '"old": {"name": "Old"}' not in result
+    assert '"new/model": {\n          "name": "New"\n        }' in result
+
+
 class Response:
+    status = 200
+
     def __init__(self, body: bytes) -> None:
         self.body = body
 
@@ -110,6 +144,7 @@ def test_fetch_models_rejects_invalid_responses(monkeypatch: pytest.MonkeyPatch)
         b'{"data":[]}',
         b'{"data":[{"id":"same"},{"id":"same"}]}',
         b'{"data":[{"id":1}]}',
+        b'{"data":[{"id":"   "}]}',
         b"not-json",
     ]
     for body in responses:
@@ -138,6 +173,20 @@ def test_fetch_models_rejects_http_url_and_timeout_errors(monkeypatch: pytest.Mo
             raise AssertionError(f"accepted network error {error!r}")
 
 
+def test_fetch_models_rejects_non_2xx_response_object(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = Response(b'{"data":[{"id":"model"}]}')
+    response.status = 503
+    monkeypatch.setattr(mod, "urlopen", lambda request, timeout: response)
+
+    with pytest.raises(mod.ModelFetchError):
+        mod.fetch_models()
+
+
+def test_whitespace_model_name_falls_back_to_id() -> None:
+    assert mod.get_display_name({"id": "model", "name": "  "}) == "model"
+    assert mod.get_display_name({"id": "model", "name": " Display "}) == " Display "
+
+
 def test_filter_models_does_not_use_a_catalog() -> None:
     models = [{"id": "provider.new-model"}, {"id": "another-model"}]
     assert mod.filter_models(models) == models
@@ -157,6 +206,22 @@ def test_list_is_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caps
     mod.main()
     assert config.read_text() == '{"provider": {"vshn-us-ai": {"models": {"old": {"name": "Old"}}}}}'
     assert "new" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("arguments", [["--all"], ["--price-class", "provider"]])
+def test_cli_compatibility_flags_update(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, arguments: list[str]) -> None:
+    config = tmp_path / "config.jsonc"
+    config.write_text('{"provider": {"vshn-us-ai": {}}}')
+    monkeypatch.setattr(mod, "urlopen", lambda request, timeout: Response(b'{"data":[{"id":"provider/model"}]}'))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["update-us-ai-models.py", *arguments, "--api-key", "test", "--config-path", str(config)],
+    )
+
+    mod.main()
+
+    assert '"provider/model"' in config.read_text()
 
 
 def test_failed_refresh_leaves_config_unchanged(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

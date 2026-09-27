@@ -48,7 +48,12 @@ def fetch_models(api_key=None, base_url=None):
         raise ModelFetchError("provider returned an invalid model response")
 
     models = data["data"]
-    if any(not isinstance(model, dict) or not isinstance(model.get("id"), str) or not model["id"] for model in models):
+    if any(
+        not isinstance(model, dict)
+        or not isinstance(model.get("id"), str)
+        or not model["id"].strip()
+        for model in models
+    ):
         raise ModelFetchError("provider returned an invalid model response")
     ids = [model["id"] for model in models]
     if len(ids) != len(set(ids)):
@@ -58,7 +63,7 @@ def fetch_models(api_key=None, base_url=None):
 
 def get_display_name(model):
     name = model.get("name")
-    return name if isinstance(name, str) and name else model["id"]
+    return name if isinstance(name, str) and name.strip() else model["id"]
 
 
 def filter_models(models, mode="default", price_class=None):
@@ -112,6 +117,93 @@ def normalize_jsonc(text):
     return "".join(result)
 
 
+def _skip_jsonc(text, position):
+    while position < len(text):
+        if text[position].isspace():
+            position += 1
+        elif text[position : position + 2] == "//":
+            newline = text.find("\n", position + 2)
+            position = len(text) if newline == -1 else newline + 1
+        elif text[position : position + 2] == "/*":
+            end = text.find("*/", position + 2)
+            position = len(text) if end == -1 else end + 2
+        else:
+            break
+    return position
+
+
+def _string_end(text, position):
+    position += 1
+    while position < len(text):
+        if text[position] == "\\":
+            position += 2
+        elif text[position] == '"':
+            return position + 1
+        else:
+            position += 1
+    raise ValueError("unterminated JSON string")
+
+
+def _matching_end(text, position):
+    pairs = {"{": "}", "[": "]"}
+    stack = [pairs[text[position]]]
+    position += 1
+    while position < len(text) and stack:
+        if text[position] == '"':
+            position = _string_end(text, position)
+        elif text[position : position + 2] == "//":
+            position = _skip_jsonc(text, position)
+        elif text[position : position + 2] == "/*":
+            position = _skip_jsonc(text, position)
+        elif text[position] in pairs:
+            stack.append(pairs[text[position]])
+            position += 1
+        elif text[position] == stack[-1]:
+            stack.pop()
+            position += 1
+        else:
+            position += 1
+    if stack:
+        raise ValueError("unterminated JSON value")
+    return position
+
+
+def _property_value_span(text, object_start, property_name):
+    if text[object_start] != "{":
+        raise ValueError("expected JSON object")
+    position = object_start + 1
+    depth = 0
+    while position < len(text):
+        position = _skip_jsonc(text, position)
+        if position >= len(text) or (text[position] == "}" and depth == 0):
+            break
+        if text[position] == '"':
+            string_start = position
+            position = _string_end(text, position)
+            if depth:
+                continue
+            if json.loads(text[string_start:position]) != property_name:
+                continue
+            colon = _skip_jsonc(text, position)
+            if colon >= len(text) or text[colon] != ":":
+                continue
+            value_start = _skip_jsonc(text, colon + 1)
+            if value_start >= len(text):
+                break
+            if text[value_start] in "[{":
+                return value_start, _matching_end(text, value_start)
+            value_end = value_start
+            while value_end < len(text) and text[value_end] not in ",}":
+                value_end += 1
+            return value_start, value_end
+        if text[position] in "[{":
+            depth += 1
+        elif text[position] in "]}":
+            depth -= 1
+        position += 1
+    raise ValueError(f"missing JSON property: {property_name}")
+
+
 def npm_name(spec):
     at = spec.rfind("@")
     return spec[:at] if at > 0 else None
@@ -119,18 +211,45 @@ def npm_name(spec):
 
 def update_config(models, config_path, npm_package=None, provider_name=None, api_base_url=None):
     with open(config_path) as config_file:
-        config = json.loads(normalize_jsonc(config_file.read()))
+        text = config_file.read()
 
-    provider_name = provider_name or PROVIDER_NAME
+    json.loads(normalize_jsonc(text))
+    provider_name = provider_name if provider_name and provider_name.strip() else PROVIDER_NAME
     models_dict = {
         model["id"]: {"name": get_display_name(model)} for model in sorted(models, key=lambda item: item["id"])
     }
-    config["provider"][provider_name] = {
-        "npm": npm_package or "@ai-sdk/openai-compatible",
-        "name": "VSHN US AI",
-        "models": models_dict,
-    }
-    text = json.dumps(config, indent=2) + "\n"
+    model_text = json.dumps(models_dict, indent=2)
+    lines = model_text.splitlines()
+    provider_start, _ = _property_value_span(text, 0, "provider")
+    provider_model_start, provider_model_end = _property_value_span(text, provider_start, provider_name)
+    try:
+        models_start, models_end = _property_value_span(text, provider_model_start, "models")
+    except ValueError:
+        closing = provider_model_end - 1
+        line_start = text.rfind("\n", 0, provider_model_start) + 1
+        provider_indentation = text[line_start:provider_model_start]
+        provider_indentation = provider_indentation[: len(provider_indentation) - len(provider_indentation.lstrip())]
+        before = text[:closing].rstrip()
+        separator = "" if before.endswith(("{", ",")) else ","
+        replacement = (
+            before
+            + separator
+            + "\n"
+            + provider_indentation
+            + "  \"models\": "
+            + lines[0]
+            + "\n"
+            + "\n".join(provider_indentation + "  " + line for line in lines[1:])
+            + "\n"
+            + provider_indentation
+        )
+        text = replacement + text[closing:]
+    else:
+        line_start = text.rfind("\n", 0, models_start) + 1
+        indentation = text[line_start:models_start]
+        indentation = indentation[: len(indentation) - len(indentation.lstrip())]
+        replacement = lines[0] + "\n" + "\n".join(indentation + line for line in lines[1:])
+        text = text[:models_start] + replacement + text[models_end:]
     directory = os.path.dirname(os.path.abspath(config_path))
     mode = os.stat(config_path).st_mode
     temporary_path = None
