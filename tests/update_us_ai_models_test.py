@@ -1,7 +1,13 @@
 import importlib.util
+import io
 import json
 import os
+import sys
+from email.message import Message
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+
+import pytest
 
 _SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -65,5 +71,122 @@ def test_update_config_parses_the_repo_jsonc_files(tmp_path: Path) -> None:
         with open(target) as f:
             config = json.loads(f.read())
         assert config["provider"]["vshn-us-ai"]["models"] == {
-            "byusage.example/model": {"name": "Model (byusage)"},
+            "byusage.example/model": {"name": "Model"},
         }
+
+
+class Response:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self) -> "Response":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        pass
+
+    def read(self) -> bytes:
+        return self.body
+
+    def getcode(self) -> int:
+        return 200
+
+
+def test_fetch_models_sorts_ids_and_uses_provider_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        mod,
+        "urlopen",
+        lambda request, timeout: Response(b'{"data":[{"id":"z-model"},{"id":"a-model","name":"A model"}]}'),
+    )
+    models = mod.fetch_models(base_url="https://provider.example")
+    assert [model["id"] for model in models] == ["a-model", "z-model"]
+    assert mod.get_display_name(models[0]) == "A model"
+    assert mod.get_display_name(models[1]) == "z-model"
+
+
+def test_fetch_models_rejects_invalid_responses(monkeypatch: pytest.MonkeyPatch) -> None:
+    responses = [
+        b"[]",
+        b'{"data":[]}',
+        b'{"data":[{"id":"same"},{"id":"same"}]}',
+        b'{"data":[{"id":1}]}',
+        b"not-json",
+    ]
+    for body in responses:
+        monkeypatch.setattr(mod, "urlopen", lambda request, timeout, body=body: Response(body))
+        try:
+            mod.fetch_models()
+        except mod.ModelFetchError:
+            pass
+        else:
+            raise AssertionError(f"accepted invalid response {body!r}")
+
+
+def test_fetch_models_rejects_http_url_and_timeout_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    errors = [
+        HTTPError("https://provider.example/models", 500, "failure", Message(), io.BytesIO()),
+        URLError("unreachable"),
+        TimeoutError(),
+    ]
+    for error in errors:
+        monkeypatch.setattr(mod, "urlopen", lambda request, timeout, error=error: (_ for _ in ()).throw(error))
+        try:
+            mod.fetch_models()
+        except mod.ModelFetchError:
+            pass
+        else:
+            raise AssertionError(f"accepted network error {error!r}")
+
+
+def test_filter_models_does_not_use_a_catalog() -> None:
+    models = [{"id": "provider.new-model"}, {"id": "another-model"}]
+    assert mod.filter_models(models) == models
+    assert mod.filter_models(models, mode="all") == models
+    assert mod.filter_models(models, price_class="provider") == [models[0]]
+
+
+def test_list_is_read_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = tmp_path / "config.jsonc"
+    config.write_text('{"provider": {"vshn-us-ai": {"models": {"old": {"name": "Old"}}}}}')
+    monkeypatch.setattr(mod, "urlopen", lambda request, timeout: Response(b'{"data":[{"id":"new"}]}'))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["update-us-ai-models.py", "--list", "--api-key", "test", "--config-path", str(config)],
+    )
+    mod.main()
+    assert config.read_text() == '{"provider": {"vshn-us-ai": {"models": {"old": {"name": "Old"}}}}}'
+    assert "new" in capsys.readouterr().out
+
+
+def test_failed_refresh_leaves_config_unchanged(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = tmp_path / "config.jsonc"
+    original = '{"provider": {"vshn-us-ai": {"models": {"old": {"name": "Old"}}}}}'
+    config.write_text(original)
+    monkeypatch.setattr(mod, "urlopen", lambda request, timeout: Response(b'{"data":[]}'))
+    monkeypatch.setattr(sys, "argv", ["update-us-ai-models.py", "--api-key", "test", "--config-path", str(config)])
+    try:
+        mod.main()
+    except SystemExit as error:
+        assert error.code == 1
+    assert config.read_text() == original
+
+
+def test_successful_refresh_updates_only_selected_provider(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = tmp_path / "config.jsonc"
+    config.write_text(
+        '{"provider":{"other":{"models":{"keep":{"name":"Keep"}}},"vshn-us-ai":{"models":{"old":{"name":"Old"}}}}}'
+    )
+    monkeypatch.setattr(
+        mod,
+        "urlopen",
+        lambda request, timeout: Response(b'{"data":[{"id":"z-model"},{"id":"a-model","name":"A model"}]}'),
+    )
+    monkeypatch.setattr(sys, "argv", ["update-us-ai-models.py", "--api-key", "test", "--config-path", str(config)])
+    mod.main()
+    result = json.loads(config.read_text())
+    assert result["provider"]["other"] == {"models": {"keep": {"name": "Keep"}}}
+    assert result["provider"]["vshn-us-ai"]["models"] == {
+        "a-model": {"name": "A model"},
+        "z-model": {"name": "z-model"},
+    }

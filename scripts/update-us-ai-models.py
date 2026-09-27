@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
-"""Update VSHN US AI models in the opencode config.
-
-Fetches the model list from us-ai.corp.vshn.net and updates the
-us-ai provider section in the opencode.jsonc config file.
-
-Usage:
-    scripts/update-us-ai-models.py                  # Update with one model per price class
-    scripts/update-us-ai-models.py --all            # Include all non-preset models
-    scripts/update-us-ai-models.py --list            # List available models without updating
-    scripts/update-us-ai-models.py --price-class byusage  # Only models from a specific price class
-"""
+"""Update the VSHN US AI models in the opencode config."""
 
 import argparse
 import getpass
 import json
 import os
 import sys
+import tempfile
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -31,204 +22,63 @@ CONFIG_PATH = os.path.join(
 )
 PROVIDER_NAME = "vshn-us-ai"
 
-# Price class prefixes, in order of preference for the "one per class" default
-PRICE_CLASSES = [
-    "byusage",
-    "subscription",
-    "expensive",
-    "openrouter",
-]
 
-# Self-created/preset model IDs that are agent wrappers, not raw models
-PRESET_MODEL_IDS = {
-    "coding-api",
-    "fix-english-grammar",
-    "fix-german-grammar",
-    "linux-command-line",
-    "text-summary",
-    "translate-to-english",
-    "translate-to-german",
-    "vshn-handbook-and-kb",
-    "web-research",
-    "chat",
-    "chat--thinking",
-    "create-or-edit-confluence-page",
-}
-
-# Preferred model per price class (model_id -> display name suffix)
-PREFERRED_MODELS = {
-    "byusage": "byusage.nebius/deepseek-ai/DeepSeek-V3.2",
-    "subscription": "subscription.glm-5.2",
-    "expensive": "expensive.gemini-3-flash",
-    "openrouter": "openrouter.deepseek/deepseek-chat-v3.1",
-}
-
-# Extra models to always include regardless of price class filtering
-EXTRA_MODELS = {
-    "-claude-haiku-v45": "Claude Haiku 4.5 (preset)",
-    "-claude-sonnet-v46": "Claude Sonnet 4.6 (preset)",
-    "expensive.gpt-5.3-codex": "GPT-5.3 Codex (expensive)",
-    "expensive.gpt-5.5": "GPT-5.5 (expensive)",
-    "subscription.kimi-k2.6": "kimi-k2.6",
-    "subscription.kimi-k2.7-code": "kimi-k2.7-code",
-    "subscription.kimi-k3": "kimi-k3",
-    "subscription.glm-5.3-flash": "subscription.glm-5.3-flash",
-    "subscription.gpt-5.6-luna": "subscription.gpt-5.6-luna",
-    "subscription.longcat-2.0": "subscription.longcat-2.0",
-    "subscription.qwen3.8-flash": "subscription.qwen3.8-flash",
-    "byusage.moonshot/kimi-k3": "byusage.moonshot/kimi-k3",
-}
+class ModelFetchError(Exception):
+    pass
 
 
 def fetch_models(api_key=None, base_url=None):
-    """Fetch model list from the US AI API."""
-    url = (base_url or API_BASE_URL) + "/models"
+    url = (base_url or API_BASE_URL).rstrip("/") + "/models"
     headers = {"Accept": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    req = Request(url, headers=headers)
     try:
-        with urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode())
-    except HTTPError as e:
-        print(f"HTTP error fetching models: {e.code} {e.reason}", file=sys.stderr)
-        sys.exit(1)
-    except URLError as e:
-        print(f"Network error fetching models: {e.reason}", file=sys.stderr)
-        print(f"Hint: Make sure you can reach {url}", file=sys.stderr)
-        sys.exit(1)
+        with urlopen(Request(url, headers=headers), timeout=30) as response:
+            status = getattr(response, "status", None) or response.getcode()
+            if not 200 <= status < 300:
+                raise ModelFetchError("provider returned a non-success status")
+            data = json.loads(response.read().decode())
+    except HTTPError as error:
+        raise ModelFetchError("provider request failed") from error
+    except (URLError, TimeoutError, OSError, json.JSONDecodeError, UnicodeError) as error:
+        raise ModelFetchError("provider request failed") from error
 
-    # The API may return {"data": [...]} or just a list
-    if isinstance(data, dict) and "data" in data:
-        return data["data"]
-    if isinstance(data, list):
-        return data
-    print(f"Unexpected API response format: {type(data)}", file=sys.stderr)
-    sys.exit(1)
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list) or not data["data"]:
+        raise ModelFetchError("provider returned an invalid model response")
+
+    models = data["data"]
+    if any(not isinstance(model, dict) or not isinstance(model.get("id"), str) or not model["id"] for model in models):
+        raise ModelFetchError("provider returned an invalid model response")
+    ids = [model["id"] for model in models]
+    if len(ids) != len(set(ids)):
+        raise ModelFetchError("provider returned duplicate model IDs")
+    return sorted(models, key=lambda model: model["id"])
 
 
 def get_display_name(model):
-    """Get a human-readable display name for a model."""
-    model_id = model.get("id", "")
-    name = model.get("name", "")
-
-    # Use pre-configured display name for extra models
-    if model_id in EXTRA_MODELS:
-        return EXTRA_MODELS[model_id]
-
-    # Use the name from the API if it differs from the id
-    if not name or name == model_id:
-        name = model_id
-
-    # Add price class hint in parentheses for clarity
-    prefix = get_price_class(model_id)
-    if prefix:
-        short_name = name if name != model_id else model_id.split("/")[-1].split(".")[-1]
-        return f"{short_name} ({prefix})"
-
-    return name if name != model_id else model_id
-
-
-def get_price_class(model_id):
-    """Extract the price class prefix from a model ID."""
-    for prefix in PRICE_CLASSES:
-        if model_id.startswith(prefix + "."):
-            return prefix
-    # Check for prefix with slash (openrouter style)
-    for prefix in PRICE_CLASSES:
-        if model_id.startswith(prefix + "/"):
-            return prefix
-    return None
-
-
-def is_preset(model_id, model=None):
-    """Check if a model is a self-created preset/agent wrapper."""
-    # Extra models are always included, never treated as presets
-    if model_id in EXTRA_MODELS:
-        return False
-    if model_id in PRESET_MODEL_IDS:
-        return True
-    # Also detect presets from the API response
-    if model and model.get("preset", False):
-        return True
-    # Models with dash prefix are presets
-    if model_id.startswith("-"):
-        return True
-    return False
+    name = model.get("name")
+    return name if isinstance(name, str) and name else model["id"]
 
 
 def filter_models(models, mode="default", price_class=None):
-    """Filter models based on mode and optional price class.
-
-    Args:
-        models: List of model dicts from API
-        mode: 'default' (one per price class + extras), 'all' (all non-preset),
-              or 'list' (just for display)
-        price_class: Optional specific price class to filter to
-    """
-    # Filter out preset/agent models
-    available = []
-    for model in models:
-        model_id = model.get("id", "")
-        if is_preset(model_id, model):
-            continue
-        available.append(model)
-
-    # Filter by specific price class if requested
     if price_class:
-        available = [m for m in available if get_price_class(m.get("id", "")) == price_class]
-
-    if mode == "all" or mode == "list":
-        return available
-
-    # Default mode: one model per price class + extras
-    result = []
-    picked_ids = set()
-
-    # First prefer the configured preferred models if they exist
-    for prefix, preferred_id in PREFERRED_MODELS.items():
-        if price_class and prefix != price_class:
-            continue
-        for model in available:
-            if model.get("id") == preferred_id:
-                result.append(model)
-                picked_ids.add(preferred_id)
-                break
-
-    # Then fill in any price class that didn't have a preferred model available
-    seen_classes = {get_price_class(m.get("id", "")) for m in result}
-    for model in available:
-        model_id = model.get("id", "")
-        if model_id in picked_ids:
-            continue
-        pc = get_price_class(model_id)
-        if pc and pc not in seen_classes:
-            result.append(model)
-            picked_ids.add(model_id)
-            seen_classes.add(pc)
-
-    # Always include extra models (Anthropic, GPT, etc.) if available
-    for model in available:
-        model_id = model.get("id", "")
-        if model_id in EXTRA_MODELS and model_id not in picked_ids:
-            result.append(model)
-            picked_ids.add(model_id)
-
-    return result
+        return [
+            model
+            for model in models
+            if model["id"].startswith(f"{price_class}.") or model["id"].startswith(f"{price_class}/")
+        ]
+    return list(models)
 
 
 def normalize_jsonc(text):
-    """Remove // line comments, /* */ block comments and trailing commas from JSONC text, preserving string contents."""
     result = []
     i = 0
-    n = len(text)
     in_string = False
-    while i < n:
+    while i < len(text):
         if in_string:
-            if text[i] == "\\" and i + 1 < n:
-                result.append(text[i])
-                result.append(text[i + 1])
+            if text[i] == "\\" and i + 1 < len(text):
+                result.extend((text[i], text[i + 1]))
                 i += 2
                 continue
             if text[i] == '"':
@@ -236,11 +86,11 @@ def normalize_jsonc(text):
             result.append(text[i])
             i += 1
         elif text[i : i + 2] == "//":
-            while i < n and text[i] != "\n":
+            while i < len(text) and text[i] != "\n":
                 i += 1
         elif text[i : i + 2] == "/*":
             i += 2
-            while i < n and text[i : i + 2] != "*/":
+            while i < len(text) and text[i : i + 2] != "*/":
                 i += 1
             i += 2
         elif text[i] == '"':
@@ -249,9 +99,9 @@ def normalize_jsonc(text):
             i += 1
         elif text[i] == ",":
             j = i + 1
-            while j < n and text[j].isspace():
+            while j < len(text) and text[j].isspace():
                 j += 1
-            if j < n and text[j] in "}]":
+            if j < len(text) and text[j] in "}]":
                 i += 1
                 continue
             result.append(text[i])
@@ -263,152 +113,69 @@ def normalize_jsonc(text):
 
 
 def npm_name(spec):
-    """Extract the npm package name from a 'name@version' spec, or None if no version."""
     at = spec.rfind("@")
-    if at <= 0:
-        return None
-    return spec[:at]
+    return spec[:at] if at > 0 else None
 
 
 def update_config(models, config_path, npm_package=None, provider_name=None, api_base_url=None):
-    """Update the opencode.jsonc config with the given models."""
-    with open(config_path) as f:
-        config = json.loads(normalize_jsonc(f.read()))
+    with open(config_path) as config_file:
+        config = json.loads(normalize_jsonc(config_file.read()))
 
     provider_name = provider_name or PROVIDER_NAME
-    api_base_url = api_base_url or API_BASE_URL
-
-    models_dict = {}
-    for model in models:
-        model_id = model.get("id", "")
-        display_name = get_display_name(model)
-        models_dict[model_id] = {"name": display_name}
-
-    sorted_models = dict(sorted(models_dict.items()))
-
-    provider_config = {
+    models_dict = {
+        model["id"]: {"name": get_display_name(model)} for model in sorted(models, key=lambda item: item["id"])
+    }
+    config["provider"][provider_name] = {
         "npm": npm_package or "@ai-sdk/openai-compatible",
         "name": "VSHN US AI",
-        "models": sorted_models,
+        "models": models_dict,
     }
-
-    config["provider"][provider_name] = provider_config
-
-    text = json.dumps(config, indent=2)
-
-    with open(config_path, "w") as f:
-        f.write(text)
-        f.write("\n")
-
-    print(f"Updated {len(sorted_models)} models in {config_path}")
+    text = json.dumps(config, indent=2) + "\n"
+    directory = os.path.dirname(os.path.abspath(config_path))
+    mode = os.stat(config_path).st_mode
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=directory, delete=False) as temporary:
+            temporary_path = temporary.name
+            temporary.write(text)
+        os.chmod(temporary_path, mode)
+        os.replace(temporary_path, config_path)
+    finally:
+        if temporary_path and os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+    print(f"Updated {len(models_dict)} models in {config_path}")
 
 
 def list_models(models):
-    """Prettyprint the available models grouped by price class."""
-    by_class = {}
-    presets = []
-
     for model in models:
-        model_id = model.get("id", "")
-        name = model.get("name", model_id)
-        pc = get_price_class(model_id)
-        if is_preset(model_id, model):
-            presets.append(model)
-        elif pc:
-            by_class.setdefault(pc, []).append((model_id, name))
-        else:
-            by_class.setdefault("other", []).append((model_id, name))
-
-    for prefix in PRICE_CLASSES:
-        if prefix in by_class:
-            print(f"\n  {prefix.upper()}:")
-            for mid, name in sorted(by_class[prefix]):
-                print(f"    {mid:50s}  →  {name}")
-
-    if "other" in by_class:
-        print("\n  OTHER:")
-        for mid, name in sorted(by_class["other"]):
-            print(f"    {mid:50s}  →  {name}")
-
-    if presets:
-        print("\n  PRESETS (excluded by default):")
-        for model in presets:
-            mid = model.get("id", "")
-            name = model.get("name", mid)
-            print(f"    {mid:50s}  →  {name}")
+        print(f"{model['id']}  →  {get_display_name(model)}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Update VSHN US AI models in opencode config")
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Include all non-preset models (not just one per price class)",
-    )
-    parser.add_argument(
-        "--list",
-        action="store_true",
-        help="List available models without updating config",
-    )
-    parser.add_argument(
-        "--price-class",
-        choices=PRICE_CLASSES,
-        help="Only include models from a specific price class",
-    )
-    parser.add_argument(
-        "--api-key",
-        default=os.environ.get("US_AI_API_KEY"),
-        help="API key for authentication (or set US_AI_API_KEY env var)",
-    )
-    parser.add_argument(
-        "--api-base-url",
-        default=API_BASE_URL,
-        help=f"API base URL (default: {API_BASE_URL})",
-    )
-    parser.add_argument(
-        "--config-path",
-        default=CONFIG_PATH,
-        help=f"Path to opencode.jsonc (default: {CONFIG_PATH})",
-    )
-
+    parser.add_argument("--all", action="store_true", help="Include all models")
+    parser.add_argument("--list", action="store_true", help="List available models without updating config")
+    parser.add_argument("--price-class", help="Only include models with this provider prefix")
+    parser.add_argument("--api-key", default=os.environ.get("US_AI_API_KEY"))
+    parser.add_argument("--api-base-url", default=API_BASE_URL)
+    parser.add_argument("--config-path", default=CONFIG_PATH)
     args = parser.parse_args()
 
-    # Resolve API key: CLI flag > env var > prompt
     api_key = args.api_key or os.environ.get("US_AI_API_KEY")
     if not api_key:
         api_key = getpass.getpass("US AI API key: ")
-
-    # Fetch models from API
-    models = fetch_models(api_key=api_key, base_url=args.api_base_url)
-
-    # Determine mode
-    if args.list:
-        mode = "list"
-    elif args.all:
-        mode = "all"
-    else:
-        mode = "default"
-
-    # Filter models
-    filtered = filter_models(models, mode=mode, price_class=args.price_class)
-
-    if args.list:
-        list_models(models)
-        print(f"\n  {len(filtered)} model(s) would be included in '{mode}' mode")
-        return
-
-    # Show what will be updated
-    print("Models to include:")
-    for model in filtered:
-        model_id = model.get("id", "")
-        print(f"  {model_id}  →  {get_display_name(model)}")
-
-    # Update config
-    update_config(
-        filtered,
-        config_path=args.config_path,
-        api_base_url=args.api_base_url,
-    )
+    try:
+        models = fetch_models(api_key=api_key, base_url=args.api_base_url)
+        selected = filter_models(models, price_class=args.price_class)
+        if not selected:
+            raise ModelFetchError("no models matched the requested filter")
+        if args.list:
+            list_models(selected)
+            return
+        update_config(selected, config_path=args.config_path, api_base_url=args.api_base_url)
+    except ModelFetchError as error:
+        print(f"Unable to refresh models: {error}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
