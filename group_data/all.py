@@ -161,6 +161,10 @@ fzf = {
     "enabled": True,
 }
 
+gh = {
+    "enabled": True,
+}
+
 git_lfs = {
     "enabled": True,
     # renovate: datasource=github-releases depName=git-lfs/git-lfs
