@@ -39,10 +39,6 @@ fzf = {
     "enabled": True,
 }
 
-gh = {
-    "enabled": True,
-}
-
 git_lfs = {
     "enabled": True,
 }
