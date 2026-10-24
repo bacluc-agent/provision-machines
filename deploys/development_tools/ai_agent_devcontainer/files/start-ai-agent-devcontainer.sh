@@ -42,6 +42,27 @@ save_port() {
   } | grep -v '^$' | sort > "$PORT_MAP_FILE"
 }
 
+lookup_password() {
+  local dir="$1"
+  if [[ -f "$PORT_MAP_DIR/credentials" ]]; then
+    awk -v d="$dir" '$1 == d { print $2 }' "$PORT_MAP_DIR/credentials"
+  fi
+}
+
+save_password() {
+  local dir="$1"
+  local password="$2"
+  mkdir -p "$PORT_MAP_DIR"
+  touch "$PORT_MAP_DIR/credentials"
+  local existing
+  existing=$(awk -v d="$dir" '$1 != d' "$PORT_MAP_DIR/credentials" 2>/dev/null || true)
+  {
+    printf "%s\n" "$existing"
+    printf "%s %s\n" "$dir" "$password"
+  } | grep -v '^$' | sort > "$PORT_MAP_DIR/credentials"
+  chmod 600 "$PORT_MAP_DIR/credentials"
+}
+
 WORKSPACE_DIR=$(pwd)
 export WORKSPACE_DIR
 WORKSPACE_BASENAME=$(basename "$WORKSPACE_DIR")
@@ -64,8 +85,15 @@ fi
 save_port "$WORKING_DIR" "$OPENCODE_PORT"
 export OPENCODE_PORT
 
-# Generate a unique compose project name based on the workspace path
-# This allows running multiple devcontainers simultaneously
+if [[ -z "${OPENCODE_SERVER_PASSWORD:-}" ]]; then
+  OPENCODE_SERVER_PASSWORD=$(lookup_password "$WORKING_DIR")
+  if [[ -z "$OPENCODE_SERVER_PASSWORD" ]]; then
+    OPENCODE_SERVER_PASSWORD=$(openssl rand -hex 16)
+  fi
+  save_password "$WORKING_DIR" "$OPENCODE_SERVER_PASSWORD"
+fi
+export OPENCODE_SERVER_PASSWORD
+
 SANITIZED_PATH=$(echo "$WORKING_DIR" | tr '/' '_' | sed 's/^_//' | sed 's/_$//')
 COMPOSE_PROJECT_NAME="ai_devcontainer_${SANITIZED_PATH}"
 export COMPOSE_PROJECT_NAME
@@ -90,15 +118,32 @@ if [[ -f $WORKSPACE_DIR/.git ]]; then
 fi
 
 devcontainer up --workspace-folder . --config "$CONFIG_DIR/devcontainer.json" &
+devcontainer_pid=$!
 
-encoded_path=$(echo -n "${WORKING_DIR}" | base64 -w0)
-opencode_url="http://localhost:${OPENCODE_PORT}/${encoded_path}"
-echo "Waiting for ${opencode_url} to respond..."
-if [[ "${ai_agent_devcontainer_open_url:-true}" = "true" ]]; then
-  open "$opencode_url"
-fi
-until curl -s -f "${opencode_url}" > /dev/null; do
+base_url="http://localhost:${OPENCODE_PORT}"
+echo "Waiting for ${base_url} to respond..."
+until curl -sf -u "opencode:${OPENCODE_SERVER_PASSWORD}" "${base_url}/api/config" > /dev/null; do
   sleep 1
 done
 
-echo "${opencode_url}"
+if ! wait "$devcontainer_pid"; then
+  echo "Error: devcontainer up failed" >&2
+  exit 1
+fi
+
+response=$(curl -sf -X POST -u "opencode:${OPENCODE_SERVER_PASSWORD}" "${base_url}/api/pair")
+code=$(printf %s "$response" | sed 's/.*"code":"\([^"]*\)".*/\1/')
+if [[ -z "$code" ]]; then
+  echo "Error: could not extract pairing code from: $response" >&2
+  echo "Fallback: use the password from ~/.config/ai-agent-devcontainer/credentials to log in at ${base_url}" >&2
+  exit 1
+fi
+opencode_url="${base_url}/auth/connect/${code}"
+
+printf %s "$opencode_url" | (xclip -selection clipboard 2>/dev/null || wl-copy 2>/dev/null || pbcopy 2>/dev/null || true)
+
+if [[ "${ai_agent_devcontainer_open_url:-true}" = "true" ]]; then
+  open "$opencode_url"
+fi
+
+echo "$opencode_url"
