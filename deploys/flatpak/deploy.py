@@ -26,6 +26,11 @@ if host.data.flatpak["enabled"]:
         packages=host.data.flatpaks,
     )
 
+    server.shell(
+        name="Set Flatpak cursor theme",
+        commands=["flatpak override --user --env=XCURSOR_THEME=Adwaita"],
+    )
+
     local.include(f"{DEPLOYS_DIR}/update_packages_script/deploy.py")
 
     files.put(
