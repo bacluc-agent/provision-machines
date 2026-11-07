@@ -137,7 +137,3 @@ displaylink_driver = {
 charging_state_monitor = {
     "enabled": False,
 }
-
-firefox_taskbar_tabs = {
-    "enabled": False,
-}
