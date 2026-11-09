@@ -38,7 +38,7 @@ if [ ! -d "$CHECKOUT_DIR/.git" ]; then
 fi
 
 run_as_user() {
-    runuser --login "$USER" -- "$@"
+    runuser -u "$USER" -- env HOME="$HOME_DIR" "$@"
 }
 
 run_as_user git -C "$CHECKOUT_DIR" fetch --prune origin "$BRANCH"
@@ -46,7 +46,7 @@ run_as_user git -C "$CHECKOUT_DIR" checkout --force "$BRANCH"
 run_as_user git -C "$CHECKOUT_DIR" reset --hard "origin/$BRANCH"
 
 /usr/local/bin/cleanup-script
-run_as_user env AUTO_PROVISION_CHECKOUT="$CHECKOUT_DIR" sh -lc 'cd "$AUTO_PROVISION_CHECKOUT" && "$HOME/bin/uv" run scripts/run_pyinfra_local.py'
+run_as_user sh -c 'cd "$1" && "$HOME/bin/uv" run scripts/run_pyinfra_local.py' sh "$CHECKOUT_DIR"
 /usr/local/bin/update-script
 
 printf '%s\n' "$WEEK" > "$SUCCESS_FILE"
