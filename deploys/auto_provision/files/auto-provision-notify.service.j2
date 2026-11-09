@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify before development machine provisioning
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/auto-provision-notify
+StandardOutput=journal
+StandardError=journal

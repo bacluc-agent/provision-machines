@@ -7,18 +7,18 @@ _DEPLOY = Path(__file__).parents[1] / "deploys" / "auto_provision"
 
 
 def test_runner_uses_the_provisioned_uv_binary() -> None:
-    runner = (_DEPLOY / "files" / "auto-provision-runner.sh").read_text()
+    runner = (_DEPLOY / "files" / "auto-provision-runner.sh.j2").read_text()
 
     assert '"$HOME/bin/uv" run scripts/run_pyinfra_local.py' in runner
     assert " && uv run scripts/run_pyinfra_local.py" not in runner
 
 
 def test_notification_stop_command_records_today_as_stopped() -> None:
-    notifier = (_DEPLOY / "files" / "auto-provision-notify.sh").read_text()
+    notifier = (_DEPLOY / "files" / "auto-provision-notify.sh.j2").read_text()
     deploy = (_DEPLOY / "deploy.py").read_text()
 
     assert "systemctl stop auto-provision.service; sudo sh -c" in notifier
-    assert '.replace("@STATE_DIR@", state_dir)' in deploy
+    assert "auto_state_dir=state_dir" in deploy
 
     command = notifier.split('"Run ', 1)[1].split(" to stop", 1)[0]
     command = command.replace('\\"', '"').replace("\\$", "$")
@@ -32,7 +32,7 @@ def test_notification_stop_command_records_today_as_stopped() -> None:
         state_dir = Path(directory) / "state"
         state_dir.mkdir()
         result = subprocess.run(
-            ["sh", "-c", command.replace("$STATE_DIR", str(state_dir))],
+            ["sh", "-c", command.replace("{{ auto_state_dir }}", str(state_dir))],
             env={**os.environ, "PATH": f"{bin_directory}:{os.environ['PATH']}"},
             check=False,
         )

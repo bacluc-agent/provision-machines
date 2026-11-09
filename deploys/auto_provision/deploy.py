@@ -1,4 +1,3 @@
-import io
 from datetime import datetime, timedelta
 
 from pyinfra import host
@@ -19,7 +18,7 @@ assert datetime.strptime(execution_time, "%H:%M:%S") - datetime.strptime(notific
 
 if auto_provision["enabled"]:
     checkout_dir = auto_provision["checkout_dir"].format(user=user)
-    state_dir = auto_provision["state_dir"]
+    state_dir = auto_provision["state_dir"].format(user=user)
     apt.packages(
         name="Install auto-provision notification dependency",
         packages=["libnotify-bin"],
@@ -29,107 +28,66 @@ if auto_provision["enabled"]:
     files.directory(
         name="Create auto-provision state directory",
         path=state_dir,
-        _sudo=True,
-        mode="755",
+        user=user,
+        group=user,
+        mode="700",
     )
 
-    runner = open(f"{dirname_of(__file__)}/files/auto-provision-runner.sh").read()
-    runner = runner.replace("@USER@", user).replace("@HOME@", f"/home/{user}")
-    runner = runner.replace("@CHECKOUT_DIR@", checkout_dir)
-    runner = runner.replace("@BRANCH@", auto_provision["branch"])
-    runner = runner.replace("@STATE_DIR@", state_dir)
-    files.put(
+    files.template(
         name="Install auto-provision runner",
-        src=io.StringIO(runner),
+        src=f"{dirname_of(__file__)}/files/auto-provision-runner.sh.j2",
         dest="/usr/local/bin/auto-provision-runner",
         _sudo=True,
         mode="755",
+        auto_user=user,
+        auto_home=f"/home/{user}",
+        auto_checkout_dir=checkout_dir,
+        auto_branch=auto_provision["branch"],
+        auto_state_dir=state_dir,
     )
 
-    notifier = open(f"{dirname_of(__file__)}/files/auto-provision-notify.sh").read()
-    notifier = notifier.replace("@USER@", user).replace("@STATE_DIR@", state_dir)
-    files.put(
+    files.template(
         name="Install auto-provision notification script",
-        src=io.StringIO(notifier),
+        src=f"{dirname_of(__file__)}/files/auto-provision-notify.sh.j2",
         dest="/usr/local/bin/auto-provision-notify",
         _sudo=True,
         mode="755",
+        auto_user=user,
+        auto_state_dir=state_dir,
     )
 
-    files.put(
+    files.template(
         name="Install auto-provision service",
-        src=io.StringIO(
-            """[Unit]
-Description=Provision the development machine
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/auto-provision-runner
-StandardOutput=journal
-StandardError=journal
-"""
-        ),
+        src=f"{dirname_of(__file__)}/files/auto-provision.service.j2",
         dest="/etc/systemd/system/auto-provision.service",
         _sudo=True,
         mode="644",
     )
 
-    files.put(
+    files.template(
         name="Install auto-provision timer",
-        src=io.StringIO(
-            f"""[Unit]
-Description=Schedule development machine provisioning
-
-[Timer]
-OnCalendar={auto_provision["on_calendar"]}
-Persistent=true
-Unit=auto-provision.service
-
-[Install]
-WantedBy=timers.target
-"""
-        ),
+        src=f"{dirname_of(__file__)}/files/auto-provision.timer.j2",
         dest="/etc/systemd/system/auto-provision.timer",
         _sudo=True,
         mode="644",
+        auto_on_calendar=auto_provision["on_calendar"],
     )
 
-    files.put(
+    files.template(
         name="Install auto-provision notification service",
-        src=io.StringIO(
-            """[Unit]
-Description=Notify before development machine provisioning
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/auto-provision-notify
-StandardOutput=journal
-StandardError=journal
-"""
-        ),
+        src=f"{dirname_of(__file__)}/files/auto-provision-notify.service.j2",
         dest="/etc/systemd/system/auto-provision-notify.service",
         _sudo=True,
         mode="644",
     )
 
-    files.put(
+    files.template(
         name="Install auto-provision notification timer",
-        src=io.StringIO(
-            f"""[Unit]
-Description=Schedule the provisioning notification
-
-[Timer]
-OnCalendar={auto_provision["notify_on_calendar"]}
-Persistent=false
-Unit=auto-provision-notify.service
-
-[Install]
-WantedBy=timers.target
-"""
-        ),
+        src=f"{dirname_of(__file__)}/files/auto-provision-notify.timer.j2",
         dest="/etc/systemd/system/auto-provision-notify.timer",
         _sudo=True,
         mode="644",
+        auto_notify_on_calendar=auto_provision["notify_on_calendar"],
     )
 
     systemd.service(

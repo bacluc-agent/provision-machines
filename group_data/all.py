@@ -137,7 +137,7 @@ auto_provision = {
     "notify_on_calendar": "Sun *-*-* 00:00:00",
     "checkout_dir": "/home/{user}/provision-machines",
     "branch": "main",
-    "state_dir": "/var/lib/auto-provision",
+    "state_dir": "/home/{user}/.local/var/auto-provision",
 }
 
 devcontainer_cli = {

@@ -1,0 +1,8 @@
+[Unit]
+Description=Provision the development machine
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/auto-provision-runner
+StandardOutput=journal
+StandardError=journal
