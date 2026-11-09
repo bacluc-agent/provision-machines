@@ -56,10 +56,10 @@ jobs:
         run: uv run scripts/run_pyinfra_local.py
 
       - name: "run auto-provision notification service"
-        run: sudo systemctl start auto-provision-notify.service
+        run: sudo systemctl start auto-provision-notify.service || { sudo journalctl -u auto-provision-notify.service --no-pager; exit 1; }
 
       - name: "run auto-provision service"
-        run: sudo systemctl start auto-provision.service
+        run: sudo systemctl start auto-provision.service || { sudo journalctl -u auto-provision.service --no-pager; exit 1; }
 
       - name: "run update-script"
         run: sudo update-script
