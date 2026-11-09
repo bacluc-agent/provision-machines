@@ -1,0 +1,8 @@
+[Unit]
+Description={{ description }}
+
+[Service]
+Type=oneshot
+ExecStart={{ exec_start | default('/usr/local/bin/auto-provision-runner') }}
+StandardOutput=journal
+StandardError=journal

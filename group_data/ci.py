@@ -141,3 +141,8 @@ charging_state_monitor = {
 firefox_taskbar_tabs = {
     "enabled": False,
 }
+
+auto_provision = {
+    "enabled": True,
+    "checkout_dir": "/home/runner/work/provision-machines/provision-machines",
+}

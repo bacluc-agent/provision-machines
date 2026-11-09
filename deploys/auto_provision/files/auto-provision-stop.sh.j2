@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -eu
+
+STATE_DIR="{{ state_dir }}"
+
+systemctl stop auto-provision.service
+mkdir -p "$STATE_DIR"
+date +%F > "$STATE_DIR/stopped-today"

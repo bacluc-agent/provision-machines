@@ -2,11 +2,11 @@
 
 set -eu
 
-USER="@USER@"
-HOME_DIR="@HOME@"
-CHECKOUT_DIR="@CHECKOUT_DIR@"
-BRANCH="@BRANCH@"
-STATE_DIR="@STATE_DIR@"
+USER="{{ user_name }}"
+HOME_DIR="{{ home }}"
+CHECKOUT_DIR="{{ checkout_dir }}"
+BRANCH="{{ branch }}"
+STATE_DIR="{{ state_dir }}"
 SUCCESS_FILE="$STATE_DIR/last-success-week"
 STOP_FILE="$STATE_DIR/stopped-today"
 RUNNING_FILE="$STATE_DIR/running"
@@ -23,12 +23,19 @@ if [ -f "$STOP_FILE" ] && [ "$(cat "$STOP_FILE")" = "$TODAY" ]; then
     exit 0
 fi
 
+finish() {
+    status=$?
+    rm -f "$RUNNING_FILE"
+    exit "$status"
+}
+
 stop_today() {
     printf '%s\n' "$TODAY" > "$STOP_FILE"
     rm -f "$RUNNING_FILE"
     exit 143
 }
 
+trap finish EXIT
 trap stop_today TERM INT
 touch "$RUNNING_FILE"
 
@@ -46,8 +53,8 @@ run_as_user git -C "$CHECKOUT_DIR" checkout --force "$BRANCH"
 run_as_user git -C "$CHECKOUT_DIR" reset --hard "origin/$BRANCH"
 
 /usr/local/bin/cleanup-script
-runuser -u "$USER" -- env HOME="$HOME_DIR" AUTO_PROVISION_CHECKOUT="$CHECKOUT_DIR" sh -c 'cd "$AUTO_PROVISION_CHECKOUT" && "$HOME/bin/uv" run scripts/run_pyinfra_local.py'
+run_as_user sh -c 'cd "$1" && uv run scripts/run_pyinfra_local.py' sh "$CHECKOUT_DIR"
 /usr/local/bin/update-script
 
 printf '%s\n' "$WEEK" > "$SUCCESS_FILE"
-rm -f "$RUNNING_FILE" "$STOP_FILE"
+rm -f "$STOP_FILE"
