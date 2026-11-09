@@ -11,7 +11,7 @@ if [ ! -S "$RUNTIME_DIR/bus" ]; then
     exit 0
 fi
 
-runuser --login --user "$USER" -- env \
+runuser --login "$USER" -- env \
     XDG_RUNTIME_DIR="$RUNTIME_DIR" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=$RUNTIME_DIR/bus" \
     notify-send \
