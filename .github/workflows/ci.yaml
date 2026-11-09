@@ -55,6 +55,12 @@ jobs:
       - name: "run pyinfra"
         run: uv run scripts/run_pyinfra_local.py
 
+      - name: "run auto-provision notification service"
+        run: sudo systemctl start auto-provision-notify.service
+
+      - name: "run auto-provision service"
+        run: sudo systemctl start auto-provision.service
+
       - name: "run update-script"
         run: sudo update-script
 
