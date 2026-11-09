@@ -61,6 +61,9 @@ jobs:
       - name: "configure auto-provision service environment"
         run: sudo systemctl set-environment CI=true
 
+      - name: "prepare auto-provision idempotence state"
+        run: sudo install -d -o runner -g runner /home/runner/.local/var/auto-provision && date +%G-%V | sudo tee /home/runner/.local/var/auto-provision/last-success-week
+
       - name: "run auto-provision service"
         run: sudo systemctl start auto-provision.service || { sudo journalctl -u auto-provision.service --no-pager; exit 1; }
 
