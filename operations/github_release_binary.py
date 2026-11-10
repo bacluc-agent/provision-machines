@@ -1,7 +1,7 @@
 import tempfile
 from typing import Callable, Union
 
-from pyinfra import host, logger
+from pyinfra import host
 from pyinfra.facts.files import Sha256File
 from pyinfra.facts.server import User
 from pyinfra.operations.files import directory, download
@@ -79,6 +79,9 @@ def github_release_binary(
                 ],
             )
     finally:
-        file_checksum = host.get_fact(Sha256File, path=dest_file_path)
-        if file_checksum != checksum:
-            logger.warning(f"Checksum mismatch for {binary_name}, expected {checksum} but got {file_checksum}")
+        shell(
+            name=f"Verify checksum of {binary_name}",
+            commands=[
+                f"(( sha256sum {dest_file_path} 2> /dev/null || shasum -a 256 {dest_file_path} ) | grep -q {checksum} ) || ( rm -f {dest_file_path} ; exit 1 )",
+            ],
+        )
