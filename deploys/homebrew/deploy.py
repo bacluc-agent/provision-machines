@@ -104,7 +104,6 @@ docker run --rm -v {HOMEBREW_HOME}:{HOMEBREW_HOME} --user {user_id} -e HOMEBREW_
             f"""
 {brew} cleanup
 {brew} update
-{brew} update
 {brew} upgrade
 {brew} cleanup
 """
