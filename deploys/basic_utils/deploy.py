@@ -32,7 +32,6 @@ files.block(
     path=f"/home/{user}/.bashrc",
     marker="# {mark} ANSIBLE MANAGED BLOCK: bin of user",
     content=f'export PATH="/home/{user}/bin:/home/{user}/.local/bin:$PATH"',
-    try_prevent_shell_expansion=True,
 )
 
 zsh_enabled = host.data.zsh["enabled"]
@@ -42,7 +41,6 @@ if zsh_enabled:
         path=f"/home/{user}/.zshrc",
         marker="# {mark} ANSIBLE MANAGED BLOCK: bin of user",
         content=f'export PATH="/home/{user}/bin:/home/{user}/.local/bin:$PATH"',
-        try_prevent_shell_expansion=True,
     )
 
 if basic_utils["enable_direnv"]:
@@ -57,7 +55,6 @@ if basic_utils["enable_direnv"]:
         path=f"/home/{user}/.bashrc",
         marker="# {mark} ANSIBLE MANAGED BLOCK: source direnv",
         content='eval "$(direnv hook bash)"',
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -66,7 +63,6 @@ if basic_utils["enable_direnv"]:
             path=f"/home/{user}/.zshrc",
             marker="# {mark} ANSIBLE MANAGED BLOCK: source direnv",
             content='eval "$(direnv hook zsh)"',
-            try_prevent_shell_expansion=True,
         )
 
 gcr_ssh_agent = basic_utils["gcr_ssh_agent"]
@@ -247,7 +243,6 @@ if [[ ! $(ssh-add -l | grep "{basic_utils["ssh_key"]["comment"]}") ]]; then
     ssh-add "$ssh_key_path"
   fi
 fi""",
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -263,7 +258,6 @@ if [[ ! $(ssh-add -l | grep "{basic_utils["ssh_key"]["comment"]}") ]]; then
     ssh-add "$ssh_key_path"
   fi
 fi""",
-            try_prevent_shell_expansion=True,
         )
 
 if basic_utils["enable_java"]:
@@ -286,7 +280,6 @@ if basic_utils["enable_java"]:
         marker="# {mark} ANSIBLE MANAGED BLOCK: sdkman-init",
         content="""export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh\"""",
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -296,7 +289,6 @@ if basic_utils["enable_java"]:
             marker="# {mark} ANSIBLE MANAGED BLOCK: sdkman-init",
             content="""export SDKMAN_DIR="$HOME/.sdkman"
 [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]] && source "$HOME/.sdkman/bin/sdkman-init.sh\"""",
-            try_prevent_shell_expansion=True,
         )
 
 if basic_utils["enable_flutter"]:
@@ -321,7 +313,6 @@ chown -R {user}:{user} /home/{user}/.fvm_flutter
         path=f"/home/{user}/.bashrc",
         marker="# {mark} ANSIBLE MANAGED BLOCK: add fvm to PATH",
         content=f'export PATH="/home/{user}/.fvm_flutter/bin:$PATH"',
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -330,7 +321,6 @@ chown -R {user}:{user} /home/{user}/.fvm_flutter
             path=f"/home/{user}/.zshrc",
             marker="# {mark} ANSIBLE MANAGED BLOCK: add fvm to PATH",
             content=f'export PATH="/home/{user}/.fvm_flutter/bin:$PATH"',
-            try_prevent_shell_expansion=True,
         )
 
     """
@@ -396,7 +386,6 @@ if basic_utils["enable_go"]:
 export GOENV_ROOT="$HOME/.goenv"
 eval "$({HOMEBREW_BIN}/goenv init -)"\
 """,
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -409,7 +398,6 @@ export GOENV_ROOT="$HOME/.goenv"
 export PATH="$GOENV_ROOT/bin:$PATH"
 eval "$({HOMEBREW_BIN}/goenv init -)"\
 """,
-            try_prevent_shell_expansion=True,
         )
 
 """
