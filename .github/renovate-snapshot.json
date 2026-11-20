@@ -34,5 +34,6 @@
   "vshn/k8ify",
   "vshn/kharon",
   "zed-industries/delta-nix",
+  "zed-industries/zed",
   "zsh-syntax-highlighting"
 ]
