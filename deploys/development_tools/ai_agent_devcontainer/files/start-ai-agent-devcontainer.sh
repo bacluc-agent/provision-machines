@@ -95,14 +95,44 @@ if [[ -f $WORKSPACE_DIR/.git ]]; then
   fi
 fi
 
-devcontainer up --workspace-folder . --config "$CONFIG_DIR/devcontainer.json" &
+CONTAINER=$(docker ps -aq \
+  --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}" \
+  --filter "label=com.docker.compose.service=devcontainer" \
+  | head -1)
+if [[ -n "$CONTAINER" ]]; then
+  CONTAINER_ENV=$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$CONTAINER")
+  if ! grep -qxF "OPENCODE_PORT=${OPENCODE_PORT}" <<< "$CONTAINER_ENV" \
+    || ! grep -qxF "OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD}" <<< "$CONTAINER_ENV"; then
+    docker rm -f "$CONTAINER" > /dev/null
+  fi
+fi
+
+devcontainer up --workspace-folder . --config "$CONFIG_DIR/devcontainer.json" 1>&2 &
 devcontainer_pid=$!
 
 base_url="http://localhost:${OPENCODE_PORT}"
 echo "Waiting for ${base_url} to respond..."
-until curl -sf -u "opencode:${OPENCODE_SERVER_PASSWORD}" "${base_url}/api/config" > /dev/null; do
+max_wait=1200
+ready=false
+for ((i = 0; i < max_wait; i++)); do
+  if curl -sf -u "opencode:${OPENCODE_SERVER_PASSWORD}" "${base_url}/api/config" > /dev/null; then
+    ready=true
+    break
+  fi
+  if ! kill -0 "$devcontainer_pid" 2>/dev/null; then
+    devcontainer_rc=0
+    wait "$devcontainer_pid" || devcontainer_rc=$?
+    echo "Error: devcontainer up exited with code ${devcontainer_rc} before ${base_url} responded" >&2
+    echo "Fallback: use the password from ~/.config/ai-agent-devcontainer/password to log in at ${base_url}" >&2
+    exit 1
+  fi
   sleep 1
 done
+if [[ "$ready" != true ]]; then
+  echo "Error: ${base_url} did not respond within 20 minutes" >&2
+  echo "Fallback: use the password from ~/.config/ai-agent-devcontainer/password to log in at ${base_url}" >&2
+  exit 1
+fi
 
 response=$(curl -sf -X POST -u "opencode:${OPENCODE_SERVER_PASSWORD}" "${base_url}/api/pair")
 code=$(printf %s "$response" | sed 's/.*"code":"\([^"]*\)".*/\1/')
