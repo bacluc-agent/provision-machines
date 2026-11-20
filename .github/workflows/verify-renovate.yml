@@ -23,11 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Install yq
-        run: |
-          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod a+x /usr/local/bin/yq
-
       - name: Check dependencies against snapshot
         run: |
           ./scripts/update-renovate-snapshot.sh --check
@@ -44,11 +39,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Install yq
-        run: |
-          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          chmod a+x /usr/local/bin/yq
 
       - name: Update snapshot
         run: |
