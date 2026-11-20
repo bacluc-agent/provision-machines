@@ -168,48 +168,6 @@ if basic_utils["enable_ssh_config_dir"]:
         basic_utils=basic_utils,
     )
 
-# if basic_utils["ssh_key"]["enable"] and basic_utils["ssh_agent"]["enable"]:
-#     files.block(
-#         name="Setup ssh-agent for bash",
-#         path=f"/home/{user}/.bashrc",
-#         marker="# {mark} ANSIBLE MANAGED BLOCK: start ssh agent",
-#         content=f"""if [ -z "$(pgrep ssh-agent)" ]; then
-#   rm -rf /tmp/ssh-*
-#   eval $(ssh-agent -s) > /dev/null
-# fi
-# export SSH_AGENT_PID=$(pgrep ssh-agent)
-# export SSH_AUTH_SOCK=$(find /tmp/ssh-* -name 'agent.*')
-#
-# if [[ ! $(ssh-add -l | grep "{basic_utils["ssh_key"]["comment"]}") ]]; then
-#   ssh_key_path="$HOME/.ssh/{basic_utils["ssh_key"]["filename"]}"
-#   if [[ -f "$ssh_key_path" ]]; then
-#     ssh-add "$ssh_key_path"
-#   fi
-# fi""",
-#         try_prevent_shell_expansion=True,
-#     )
-#
-#     if zsh_enabled:
-#         files.block(
-#             name="Setup ssh-agent for zsh",
-#             path=f"/home/{user}/.zshrc",
-#             marker="# {mark} ANSIBLE MANAGED BLOCK: start ssh agent",
-#             content=f"""if [ -z "$(pgrep ssh-agent)" ]; then
-#   rm -rf /tmp/ssh-*
-#   eval $(ssh-agent -s) > /dev/null
-# fi
-# export SSH_AGENT_PID=$(pgrep ssh-agent)
-# export SSH_AUTH_SOCK=$(find /tmp/ssh-* -name 'agent.*')
-#
-# if [[ ! $(ssh-add -l | grep "{basic_utils["ssh_key"]["comment"]}") ]]; then
-#   ssh_key_path="$HOME/.ssh/{basic_utils["ssh_key"]["filename"]}"
-#   if [[ -f "$ssh_key_path" ]]; then
-#     ssh-add "$ssh_key_path"
-#   fi
-# fi""",
-#             try_prevent_shell_expansion=True,
-#         )
-
 if gcr_ssh_agent["enable"]:
     ssh_key_path = f"/home/{user}/.ssh/{basic_utils['ssh_key']['filename']}"
     ssh_key_exists = host.get_fact(File, ssh_key_path)
@@ -267,19 +225,6 @@ fi""",
         )
 
 if basic_utils["enable_java"]:
-    """TODO: install skdman
-    - name: check if sdkman is installed
-  when: basic_utils.enable_java | default(false)
-  ansible.builtin.stat:
-    path: ~/.sdkman
-  register: basic_utils__sdkman
-
-- name: install sdkman # noqa command-instead-of-module
-  when: (basic_utils.enable_java | default(false)) and (basic_utils__sdkman.stat.exists is false)
-  ansible.builtin.shell: |
-    curl -s https://get.sdkman.io | bash
-    """
-
     files.block(
         name="Add sdkman to .bashrc",
         path=f"/home/{user}/.bashrc",
@@ -333,16 +278,6 @@ chown -R {user}:{user} /home/{user}/.fvm_flutter
             try_prevent_shell_expansion=True,
         )
 
-    """
-    TODO
-    - name: install android studio
-      become: true
-      community.general.snap:
-        name:
-          - android-studio
-        classic: true
-    """
-
     server.user(
         name=f"Add {user} to kvm group",
         user=user,
@@ -350,22 +285,6 @@ chown -R {user}:{user} /home/{user}/.fvm_flutter
         append=True,
         _sudo=True,
     )
-
-    """
-    SETUP proxies
-
-    - name: add dart proxy
-      ansible.builtin.template:
-        src: "dart-proxy.j2"
-        dest: "~/bin/dart"
-        mode: "u=rwx,go=rx"
-
-    - name: add flutter proxy
-      ansible.builtin.template:
-        src: "flutter-proxy.j2"
-        dest: "~/bin/flutter"
-        mode: "u=rwx,go=rx"
-   """
 
 
 if basic_utils["enable_openvpn_config_import_network_manager"]:
@@ -411,15 +330,3 @@ eval "$({HOMEBREW_BIN}/goenv init -)"\
 """,
             try_prevent_shell_expansion=True,
         )
-
-"""
-TODO
-- name: Add setup for bat
-  when: "'bat' in ansible_facts.packages"
-  block:
-    - name: Create a symbolic link for bat
-      ansible.builtin.file:
-        src: "/usr/bin/batcat"
-        dest: "/home/{{ user }}/bin/bat"
-        state: link
-"""
