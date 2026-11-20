@@ -92,7 +92,6 @@ if host.data.bash["enabled"]:
         path=f"/home/{user}/.bashrc",
         marker="# {mark} ANSIBLE MANAGED BLOCK: add snap bin to path",
         content='export PATH="/snap/bin:$PATH"',
-        try_prevent_shell_expansion=True,
     )
 
     if zsh_enabled:
@@ -101,7 +100,6 @@ if host.data.bash["enabled"]:
             path=f"/home/{user}/.zshrc",
             marker="# {mark} ANSIBLE MANAGED BLOCK: add snap bin to path",
             content='export PATH="/snap/bin:$PATH"',
-            try_prevent_shell_expansion=True,
         )
 
     files.block(
