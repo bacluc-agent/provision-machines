@@ -79,7 +79,7 @@ exit $exit_code"""
         src=io.StringIO(
             f"""#!/bin/sh
 HOMEBREW_VERSION={homebrew_version}
-docker run --rm -v {HOMEBREW_HOME}:{HOMEBREW_HOME} --user {user_id} -e HOMEBREW_NO_SANDBOX_LINUX=1 homebrew/brew:$HOMEBREW_VERSION brew "$@"
+docker run --rm -v {HOMEBREW_HOME}:{HOMEBREW_HOME} --user {user_id} homebrew/brew:$HOMEBREW_VERSION brew "$@"
 """
         ),
         dest=user_brew_bin(user),
