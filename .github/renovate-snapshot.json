@@ -9,6 +9,7 @@
   "curl",
   "databus23/helm-diff",
   "direnv",
+  "gdraheim/docker-systemctl-replacement",
   "git",
   "git-lfs/git-lfs",
   "itaysk/kubectl-neat",
