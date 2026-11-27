@@ -8,19 +8,21 @@ from operations.user import get_user_name
 user = get_user_name()
 
 if host.data.fluxcd["enabled"]:
-    flux_aliases = """alias flux='docker run --rm -it \\
+    # renovate: datasource=docker depName=ghcr.io/fluxcd/flux-cli
+    flux_cli_version = "v2.2.3"
+    flux_aliases = f"""alias flux='docker run --rm -it \\
   --user $UID \\
   --volume $KUBECONFIG:/kubeconfig \\
   --volume $PWD:/workspace \\
   --workdir $PWD:/workspace \\
-  ghcr.io/fluxcd/flux-cli:${FLUX_CLI_VERSION:-v2.2.3} --kubeconfig=/kubeconfig'
+  ghcr.io/fluxcd/flux-cli:${{FLUX_CLI_VERSION:-{flux_cli_version}}} --kubeconfig=/kubeconfig'
 
 alias fluxa='docker run --rm -it \\
   --user $UID \\
   --volume $KUBECONFIG:/kubeconfig \\
   --volume $PWD:/workspace \\
   --workdir $PWD:/workspace \\
-  ghcr.io/fluxcd/flux-cli:${FLUX_CLI_VERSION:-v2.2.3} --kubeconfig=/kubeconfig --as "system:admin"'
+  ghcr.io/fluxcd/flux-cli:${{FLUX_CLI_VERSION:-{flux_cli_version}}} --kubeconfig=/kubeconfig --as "system:admin"'
 """
 
     files.put(
